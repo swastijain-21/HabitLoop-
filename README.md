@@ -55,3 +55,6 @@ Habitloop/
    - 1–2 developers focus on `backend/` (Spring Boot endpoints, MySQL connectivity).
 2. **Keep APIs Simple:** Agree early on simple JSON request/response formats for endpoints like `/api/habits` and `/api/habits/{id}/check`.
 3. **No Premature Optimization:** Stick to basic CRUD and MVP features first before adding complex functionality.
+
+#HabitLoop Fitness Tracker
+Habitloop is a personalized wellness and lifestyle companion that turns everyday data into actionable insights. It tracks habits such as sleep, screen time, activity, exercise, mood, and productivity, identifies meaningful patterns, and recommends simple, fun activities to help users improve. 
