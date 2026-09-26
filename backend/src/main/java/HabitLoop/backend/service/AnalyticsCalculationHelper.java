@@ -1,5 +1,6 @@
 package HabitLoop.backend.service;
 
+import HabitLoop.backend.dto.analytics.MetricComparisonDTO;
 import HabitLoop.backend.dto.analytics.PeriodComparisonDTO;
 import org.springframework.stereotype.Component;
 
@@ -154,5 +155,20 @@ public class AnalyticsCalculationHelper {
                 metricName, unit, beforeAvg, afterAvg, absChange, pctChange,
                 beforeSize, afterSize, direction, summary.toString()
         );
+    }
+
+    public MetricComparisonDTO calculateMetricComparison(String unit,
+                                                         List<Double> previousValues,
+                                                         List<Double> currentValues) {
+        int prevCount = previousValues != null ? (int) previousValues.stream().filter(Objects::nonNull).count() : 0;
+        int currCount = currentValues != null ? (int) currentValues.stream().filter(Objects::nonNull).count() : 0;
+
+        Double prevAvg = calculateMean(previousValues);
+        Double currAvg = calculateMean(currentValues);
+
+        Double absChange = safeAbsoluteChange(prevAvg, currAvg);
+        Double pctChange = safePercentageChange(prevAvg, currAvg);
+
+        return new MetricComparisonDTO(currAvg, prevAvg, absChange, pctChange, unit, currCount, prevCount);
     }
 }

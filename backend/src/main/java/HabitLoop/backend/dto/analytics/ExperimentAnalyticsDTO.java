@@ -1,6 +1,7 @@
 package HabitLoop.backend.dto.analytics;
 
 import java.time.LocalDate;
+import java.util.Map;
 
 public class ExperimentAnalyticsDTO {
     private Long experimentId;
@@ -23,6 +24,7 @@ public class ExperimentAnalyticsDTO {
     private boolean hasSufficientData;
     private String direction;
     private String descriptiveResult;
+    private Map<String, MetricComparisonDTO> metrics;
 
     public ExperimentAnalyticsDTO() {}
 
@@ -34,6 +36,21 @@ public class ExperimentAnalyticsDTO {
                                   Double absoluteChange, Double percentageChange,
                                   int beforeCount, int duringCount, boolean hasSufficientData,
                                   String direction, String descriptiveResult) {
+        this(experimentId, userId, title, hypothesis, targetMetric, unit, status,
+                beforeStartDate, beforeEndDate, duringStartDate, duringEndDate,
+                beforeAverage, duringAverage, absoluteChange, percentageChange,
+                beforeCount, duringCount, hasSufficientData, direction, descriptiveResult, null);
+    }
+
+    public ExperimentAnalyticsDTO(Long experimentId, Long userId, String title, String hypothesis,
+                                  String targetMetric, String unit, String status,
+                                  LocalDate beforeStartDate, LocalDate beforeEndDate,
+                                  LocalDate duringStartDate, LocalDate duringEndDate,
+                                  Double beforeAverage, Double duringAverage,
+                                  Double absoluteChange, Double percentageChange,
+                                  int beforeCount, int duringCount, boolean hasSufficientData,
+                                  String direction, String descriptiveResult,
+                                  Map<String, MetricComparisonDTO> metrics) {
         this.experimentId = experimentId;
         this.userId = userId;
         this.title = title;
@@ -54,6 +71,7 @@ public class ExperimentAnalyticsDTO {
         this.hasSufficientData = hasSufficientData;
         this.direction = direction;
         this.descriptiveResult = descriptiveResult;
+        this.metrics = metrics;
     }
 
     // Getters and Setters
@@ -215,5 +233,13 @@ public class ExperimentAnalyticsDTO {
 
     public void setDescriptiveResult(String descriptiveResult) {
         this.descriptiveResult = descriptiveResult;
+    }
+
+    public Map<String, MetricComparisonDTO> getMetrics() {
+        return metrics;
+    }
+
+    public void setMetrics(Map<String, MetricComparisonDTO> metrics) {
+        this.metrics = metrics;
     }
 }

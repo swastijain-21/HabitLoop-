@@ -3,6 +3,7 @@ package HabitLoop.backend.controller;
 import HabitLoop.backend.dto.analytics.*;
 import HabitLoop.backend.exception.GlobalExceptionHandler;
 import HabitLoop.backend.repository.UserRepository;
+import HabitLoop.backend.service.CrossDomainAnalyticsService;
 import HabitLoop.backend.service.ExperimentAnalyticsService;
 import HabitLoop.backend.service.HabitAnalyticsService;
 import HabitLoop.backend.service.HealthAnalyticsService;
@@ -41,6 +42,9 @@ class AnalyticsControllerTest {
     private ExperimentAnalyticsService experimentAnalyticsService;
 
     @Mock
+    private CrossDomainAnalyticsService crossDomainAnalyticsService;
+
+    @Mock
     private UserRepository userRepository;
 
     @BeforeEach
@@ -49,6 +53,7 @@ class AnalyticsControllerTest {
                 habitAnalyticsService,
                 healthAnalyticsService,
                 experimentAnalyticsService,
+                crossDomainAnalyticsService,
                 userRepository
         );
         this.mockMvc = MockMvcBuilders.standaloneSetup(controller)
@@ -341,5 +346,117 @@ class AnalyticsControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalRecords").value(0))
                 .andExpect(jsonPath("$.trend").value("INSUFFICIENT_DATA"));
+    }
+
+    // =========================================================================
+    // CROSS-DOMAIN SUMMARY ENDPOINT TESTS
+    // =========================================================================
+
+    @Test
+    @DisplayName("GET /api/analytics/summary/{userId} - Success")
+    void getCrossDomainSummary_Success() throws Exception {
+        Long userId = 1L;
+        LocalDate curStart = LocalDate.of(2026, 9, 17);
+        LocalDate curEnd = LocalDate.of(2026, 9, 23);
+        LocalDate prevStart = LocalDate.of(2026, 9, 10);
+        LocalDate prevEnd = LocalDate.of(2026, 9, 16);
+
+        PeriodBoundaryDTO curPeriod = new PeriodBoundaryDTO(curStart, curEnd);
+        PeriodBoundaryDTO prevPeriod = new PeriodBoundaryDTO(prevStart, prevEnd);
+
+        HabitDomainSummaryDTO habits = new HabitDomainSummaryDTO(
+                4, 4, 82.14, 11, 11, "IMPROVING"
+        );
+        SleepDomainSummaryDTO sleep = new SleepDomainSummaryDTO(
+                7.1, 5.8, 1.3, 22.41, "hours", 7, 7, null
+        );
+        MoodDomainSummaryDTO mood = new MoodDomainSummaryDTO(
+                7.0, 6.0, 1.0, 16.67, "points (1-10)", 7, 7, "Content", null, null
+        );
+        MetricComparisonDTO screenTime = new MetricComparisonDTO(
+                280.0, 385.71, -105.71, -27.41, "minutes", 7, 7
+        );
+        ActivityDomainSummaryDTO activity = new ActivityDomainSummaryDTO(
+                new MetricComparisonDTO(10842.86, 9200.0, 1642.86, 17.86, "steps", 7, 7),
+                new MetricComparisonDTO(50.71, 35.0, 15.71, 44.89, "minutes", 7, 7),
+                new MetricComparisonDTO(2742.86, 2100.0, 642.86, 30.61, "ml", 7, 7)
+        );
+
+        CrossDomainAnalyticsSummaryDTO summary = new CrossDomainAnalyticsSummaryDTO(
+                userId, curPeriod, prevPeriod, habits, sleep, mood, screenTime, activity, List.of()
+        );
+
+        when(userRepository.existsById(userId)).thenReturn(true);
+        when(crossDomainAnalyticsService.getCrossDomainSummary(eq(userId), eq(curStart), eq(curEnd), eq(prevStart), eq(prevEnd)))
+                .thenReturn(summary);
+
+        mockMvc.perform(get("/api/analytics/summary/{userId}", userId)
+                        .param("startDate", "2026-09-17")
+                        .param("endDate", "2026-09-23")
+                        .param("previousStartDate", "2026-09-10")
+                        .param("previousEndDate", "2026-09-16")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(1))
+                .andExpect(jsonPath("$.currentPeriod.startDate").value("2026-09-17"))
+                .andExpect(jsonPath("$.currentPeriod.endDate").value("2026-09-23"))
+                .andExpect(jsonPath("$.previousPeriod.startDate").value("2026-09-10"))
+                .andExpect(jsonPath("$.previousPeriod.endDate").value("2026-09-16"))
+                .andExpect(jsonPath("$.habits.totalHabits").value(4))
+                .andExpect(jsonPath("$.habits.completionPercentage").value(82.14))
+                .andExpect(jsonPath("$.habits.currentStreak").value(11))
+                .andExpect(jsonPath("$.habits.recentCompletionTrend").value("IMPROVING"))
+                .andExpect(jsonPath("$.sleep.currentAverage").value(7.1))
+                .andExpect(jsonPath("$.sleep.previousAverage").value(5.8))
+                .andExpect(jsonPath("$.sleep.change").value(1.3))
+                .andExpect(jsonPath("$.sleep.percentageChange").value(22.41))
+                .andExpect(jsonPath("$.mood.currentAverage").value(7.0))
+                .andExpect(jsonPath("$.mood.dominantMood").value("Content"))
+                .andExpect(jsonPath("$.screenTime.currentAverage").value(280.0))
+                .andExpect(jsonPath("$.activity.steps.currentAverage").value(10842.86))
+                .andExpect(jsonPath("$.activity.waterIntake.currentAverage").value(2742.86));
+    }
+
+    @Test
+    @DisplayName("GET /api/analytics/summary/{userId} - User Not Found (404)")
+    void getCrossDomainSummary_NotFound() throws Exception {
+        Long userId = 999L;
+        when(userRepository.existsById(userId)).thenReturn(false);
+
+        mockMvc.perform(get("/api/analytics/summary/{userId}", userId)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.error").value("Not Found"));
+    }
+
+    @Test
+    @DisplayName("GET /api/analytics/summary/{userId} - Invalid Current Dates (400)")
+    void getCrossDomainSummary_InvalidCurrentDates() throws Exception {
+        Long userId = 1L;
+        when(userRepository.existsById(userId)).thenReturn(true);
+
+        mockMvc.perform(get("/api/analytics/summary/{userId}", userId)
+                        .param("startDate", "2026-09-25")
+                        .param("endDate", "2026-09-20")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    @DisplayName("GET /api/analytics/summary/{userId} - Invalid Previous Dates (400)")
+    void getCrossDomainSummary_InvalidPreviousDates() throws Exception {
+        Long userId = 1L;
+        when(userRepository.existsById(userId)).thenReturn(true);
+
+        mockMvc.perform(get("/api/analytics/summary/{userId}", userId)
+                        .param("startDate", "2026-09-20")
+                        .param("endDate", "2026-09-25")
+                        .param("previousStartDate", "2026-09-18")
+                        .param("previousEndDate", "2026-09-10")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
     }
 }

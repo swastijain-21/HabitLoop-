@@ -250,7 +250,72 @@ All health endpoints accept date-range filtering via `startDate` and `endDate` q
   "duringCount": 7,
   "hasSufficientData": true,
   "direction": "INCREASE",
-  "descriptiveResult": "During the baseline period, the average was 6.16 hours (7 records). During the intervention period, the average was 7.74 hours (7 records). This reflects a measured increase of 1.58 hours (+25.65%)."
+  "descriptiveResult": "During the baseline period, the average was 6.16 hours (7 records). During the intervention period, the average was 7.74 hours (7 records). This reflects a measured increase of 1.58 hours (+25.65%).",
+  "metrics": {
+    "sleep": {
+      "currentAverage": 7.74,
+      "previousAverage": 6.16,
+      "change": 1.58,
+      "percentageChange": 25.65,
+      "unit": "hours",
+      "currentRecords": 7,
+      "previousRecords": 7
+    },
+    "mood": {
+      "currentAverage": 7.5,
+      "previousAverage": 6.0,
+      "change": 1.5,
+      "percentageChange": 25.0,
+      "unit": "points (1-10)",
+      "currentRecords": 7,
+      "previousRecords": 7
+    },
+    "screenTime": {
+      "currentAverage": 280.0,
+      "previousAverage": 385.71,
+      "change": -105.71,
+      "percentageChange": -27.41,
+      "unit": "minutes",
+      "currentRecords": 7,
+      "previousRecords": 7
+    },
+    "steps": {
+      "currentAverage": 10842.86,
+      "previousAverage": 9200.0,
+      "change": 1642.86,
+      "percentageChange": 17.86,
+      "unit": "steps",
+      "currentRecords": 7,
+      "previousRecords": 7
+    },
+    "activeMinutes": {
+      "currentAverage": 50.71,
+      "previousAverage": 35.0,
+      "change": 15.71,
+      "percentageChange": 44.89,
+      "unit": "minutes",
+      "currentRecords": 7,
+      "previousRecords": 7
+    },
+    "waterIntake": {
+      "currentAverage": 2742.86,
+      "previousAverage": 2100.0,
+      "change": 642.86,
+      "percentageChange": 30.61,
+      "unit": "ml",
+      "currentRecords": 7,
+      "previousRecords": 7
+    },
+    "habitCompletion": {
+      "currentAverage": 85.71,
+      "previousAverage": 71.43,
+      "change": 14.28,
+      "percentageChange": 19.99,
+      "unit": "%",
+      "currentRecords": 7,
+      "previousRecords": 7
+    }
+  }
 }
 ```
 
@@ -264,7 +329,152 @@ All health endpoints accept date-range filtering via `startDate` and `endDate` q
 
 ---
 
-## 4. Error Handling & Contract Specifications
+## 4. Cross-Domain Analytics Summary (Gemini-Ready Data Layer) 🤖
+
+### 4.1 Unified User Analytics Summary
+* **Method:** `GET`
+* **Path:** `/api/analytics/summary/{userId}`
+* **Parameters:**
+  * `userId` (Path variable, `Long`, required): ID of the user.
+  * `startDate` (Query param, `LocalDate` [YYYY-MM-DD], optional): Start date of the current evaluation window. Defaults to `endDate - 6 days` (7-day window) if omitted.
+  * `endDate` (Query param, `LocalDate` [YYYY-MM-DD], optional): End date of the current evaluation window. Defaults to today (`LocalDate.now()`) if omitted.
+  * `previousStartDate` (Query param, `LocalDate` [YYYY-MM-DD], optional): Explicit start date for comparison baseline period. If omitted, defaults to the period of equal duration directly preceding `startDate`.
+  * `previousEndDate` (Query param, `LocalDate` [YYYY-MM-DD], optional): Explicit end date for comparison baseline period. If omitted, defaults to `startDate - 1 day`.
+* **Purpose:** Single consolidated, machine-readable analytical summary combining habits, sleep, mood, screen time, physical activity, and experiments with explicit period-over-period comparisons. Suitable for direct ingestion by Person 1 (dashboard views) and Person 4 (Gemini AI prompt synthesis).
+* **Response DTO:** `CrossDomainAnalyticsSummaryDTO`
+* **Example Request:**  
+  `GET /api/analytics/summary/1?startDate=2026-09-17&endDate=2026-09-23`
+* **Example Response (200 OK):**
+```json
+{
+  "userId": 1,
+  "currentPeriod": {
+    "startDate": "2026-09-17",
+    "endDate": "2026-09-23"
+  },
+  "previousPeriod": {
+    "startDate": "2026-09-10",
+    "endDate": "2026-09-16"
+  },
+  "habits": {
+    "totalHabits": 4,
+    "activeHabits": 4,
+    "completionPercentage": 82.14,
+    "currentStreak": 11,
+    "longestStreak": 11,
+    "recentCompletionTrend": "IMPROVING"
+  },
+  "sleep": {
+    "currentAverage": 7.1,
+    "previousAverage": 5.8,
+    "change": 1.3,
+    "percentageChange": 22.41,
+    "unit": "hours",
+    "currentRecords": 7,
+    "previousRecords": 7,
+    "quality": {
+      "currentAverage": 6.8,
+      "previousAverage": 5.2,
+      "change": 1.6,
+      "percentageChange": 30.77,
+      "unit": "points (1-10)",
+      "currentRecords": 7,
+      "previousRecords": 7
+    }
+  },
+  "mood": {
+    "currentAverage": 7.0,
+    "previousAverage": 6.0,
+    "change": 1.0,
+    "percentageChange": 16.67,
+    "unit": "points (1-10)",
+    "currentRecords": 7,
+    "previousRecords": 7,
+    "dominantMood": "Energized",
+    "energyLevel": {
+      "currentAverage": 6.5,
+      "previousAverage": 4.86,
+      "change": 1.64,
+      "percentageChange": 33.74,
+      "unit": "points (1-10)",
+      "currentRecords": 7,
+      "previousRecords": 7
+    },
+    "stressLevel": {
+      "currentAverage": 4.1,
+      "previousAverage": 6.86,
+      "change": -2.76,
+      "percentageChange": -40.23,
+      "unit": "points (1-10)",
+      "currentRecords": 7,
+      "previousRecords": 7
+    }
+  },
+  "screenTime": {
+    "currentAverage": 280.0,
+    "previousAverage": 385.71,
+    "change": -105.71,
+    "percentageChange": -27.41,
+    "unit": "minutes",
+    "currentRecords": 7,
+    "previousRecords": 7
+  },
+  "activity": {
+    "steps": {
+      "currentAverage": 10842.86,
+      "previousAverage": 9200.0,
+      "change": 1642.86,
+      "percentageChange": 17.86,
+      "unit": "steps",
+      "currentRecords": 7,
+      "previousRecords": 7
+    },
+    "activeMinutes": {
+      "currentAverage": 50.71,
+      "previousAverage": 35.0,
+      "change": 15.71,
+      "percentageChange": 44.89,
+      "unit": "minutes",
+      "currentRecords": 7,
+      "previousRecords": 7
+    },
+    "waterIntake": {
+      "currentAverage": 2742.86,
+      "previousAverage": 2100.0,
+      "change": 642.86,
+      "percentageChange": 30.61,
+      "unit": "ml",
+      "currentRecords": 7,
+      "previousRecords": 7
+    }
+  },
+  "experiments": [
+    {
+      "experimentId": 1,
+      "userId": 1,
+      "title": "Digital Sunset: No Phone After 9 PM",
+      "targetMetric": "SLEEP_HOURS",
+      "status": "ACTIVE"
+    }
+  ]
+}
+```
+* **Empty Data Situations:**
+  * When a user has 0 records during the requested periods, the API returns **200 OK** with safe default representations:
+    * `currentAverage`: `null`
+    * `previousAverage`: `null`
+    * `change`: `null`
+    * `percentageChange`: `null`
+    * `currentRecords`: `0`
+    * `previousRecords`: `0`
+    * `habits.completionPercentage`: `0.0`, `currentStreak`: `0`, `longestStreak`: `0`, `recentCompletionTrend`: `"INSUFFICIENT_DATA"`.
+  * Zero-baseline rule: When baseline is `0.0` and current is `> 0.0`, `percentageChange` returns `null` to prevent division by zero or inflated infinite percentages. When both baseline and current are `0.0`, `percentageChange` returns `0.0`.
+* **Important Contract Limitations:**
+  * **Measurements only:** This layer strictly delivers verified mathematical measurements (changes, percentages, averages). It intentionally does NOT infer causal links (e.g., does not claim that screen time reduction caused sleep improvements). All interpretation, causality, and recommendations are reserved for Person 4's Gemini integration.
+
+---
+
+## 5. Error Handling & Contract Specifications
 
 Errors return a standard JSON object with appropriate HTTP status codes:
 ```json
@@ -278,9 +488,11 @@ Errors return a standard JSON object with appropriate HTTP status codes:
 
 * **400 Bad Request:**
   * `startDate` is chronologically after `endDate`.
-  * Missing required parameters (`userId`, `startDate`, etc.).
+  * `previousStartDate` is chronologically after `previousEndDate`.
+  * Missing required parameters (`userId`, etc.).
   * Malformed date or number formats.
 * **404 Not Found:**
   * Specified `userId`, `habitId`, or `experimentId` does not exist in the database.
 * **Empty Data Situations:**
   * When a user has 0 records, the API returns **200 OK** with safe default metrics (`null` averages, `0` counts, `INSUFFICIENT_DATA` trend) rather than crashing or throwing 500 errors.
+

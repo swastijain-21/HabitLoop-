@@ -2,6 +2,7 @@ package HabitLoop.backend.controller;
 
 import HabitLoop.backend.dto.analytics.*;
 import HabitLoop.backend.repository.UserRepository;
+import HabitLoop.backend.service.CrossDomainAnalyticsService;
 import HabitLoop.backend.service.ExperimentAnalyticsService;
 import HabitLoop.backend.service.HabitAnalyticsService;
 import HabitLoop.backend.service.HealthAnalyticsService;
@@ -22,15 +23,18 @@ public class AnalyticsController {
     private final HabitAnalyticsService habitAnalyticsService;
     private final HealthAnalyticsService healthAnalyticsService;
     private final ExperimentAnalyticsService experimentAnalyticsService;
+    private final CrossDomainAnalyticsService crossDomainAnalyticsService;
     private final UserRepository userRepository;
 
     public AnalyticsController(HabitAnalyticsService habitAnalyticsService,
                                HealthAnalyticsService healthAnalyticsService,
                                ExperimentAnalyticsService experimentAnalyticsService,
+                               CrossDomainAnalyticsService crossDomainAnalyticsService,
                                UserRepository userRepository) {
         this.habitAnalyticsService = habitAnalyticsService;
         this.healthAnalyticsService = healthAnalyticsService;
         this.experimentAnalyticsService = experimentAnalyticsService;
+        this.crossDomainAnalyticsService = crossDomainAnalyticsService;
         this.userRepository = userRepository;
     }
 
@@ -171,5 +175,34 @@ public class AnalyticsController {
         }
         List<ExperimentAnalyticsDTO> experiments = experimentAnalyticsService.analyzeUserExperiments(userId);
         return ResponseEntity.ok(experiments);
+    }
+
+    // =========================================================================
+    // 4. CROSS-DOMAIN ANALYTICS SUMMARY (GEMINI-READY)
+    // =========================================================================
+
+    @GetMapping("/summary/{userId}")
+    public ResponseEntity<?> getCrossDomainSummary(
+            @PathVariable Long userId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate previousStartDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate previousEndDate) {
+        if (!userRepository.existsById(userId)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ApiErrorResponseDTO(404, "Not Found", "User with id " + userId + " does not exist."));
+        }
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiErrorResponseDTO(400, "Bad Request", "startDate (" + startDate + ") cannot be after endDate (" + endDate + ")."));
+        }
+        if (previousStartDate != null && previousEndDate != null && previousStartDate.isAfter(previousEndDate)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiErrorResponseDTO(400, "Bad Request", "previousStartDate (" + previousStartDate + ") cannot be after previousEndDate (" + previousEndDate + ")."));
+        }
+        CrossDomainAnalyticsSummaryDTO summary = crossDomainAnalyticsService.getCrossDomainSummary(
+                userId, startDate, endDate, previousStartDate, previousEndDate
+        );
+        return ResponseEntity.ok(summary);
     }
 }

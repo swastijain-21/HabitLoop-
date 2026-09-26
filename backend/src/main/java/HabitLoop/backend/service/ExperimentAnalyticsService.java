@@ -1,6 +1,7 @@
 package HabitLoop.backend.service;
 
 import HabitLoop.backend.dto.analytics.ExperimentAnalyticsDTO;
+import HabitLoop.backend.dto.analytics.MetricComparisonDTO;
 import HabitLoop.backend.entity.Experiment;
 import HabitLoop.backend.entity.HabitLog;
 import HabitLoop.backend.entity.HealthData;
@@ -14,7 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -139,12 +142,32 @@ public class ExperimentAnalyticsService {
                 absChange, pctChange, beforeCount, duringCount
         );
 
+        Map<String, MetricComparisonDTO> metricsMap = new LinkedHashMap<>();
+        metricsMap.put("sleep", calcHelper.calculateMetricComparison("hours",
+                fetchSleepHours(userId, bStart, bEnd), fetchSleepHours(userId, dStart, dEnd)));
+        metricsMap.put("mood", calcHelper.calculateMetricComparison("points (1-10)",
+                fetchMoodScores(userId, bStart, bEnd), fetchMoodScores(userId, dStart, dEnd)));
+        metricsMap.put("screenTime", calcHelper.calculateMetricComparison("minutes",
+                fetchScreenTime(userId, bStart, bEnd), fetchScreenTime(userId, dStart, dEnd)));
+        metricsMap.put("steps", calcHelper.calculateMetricComparison("steps",
+                fetchStepCount(userId, bStart, bEnd), fetchStepCount(userId, dStart, dEnd)));
+        metricsMap.put("activeMinutes", calcHelper.calculateMetricComparison("minutes",
+                fetchActiveMinutes(userId, bStart, bEnd), fetchActiveMinutes(userId, dStart, dEnd)));
+        metricsMap.put("waterIntake", calcHelper.calculateMetricComparison("ml",
+                fetchWaterIntake(userId, bStart, bEnd), fetchWaterIntake(userId, dStart, dEnd)));
+        if (exp.getHabit() != null) {
+            metricsMap.put("habitCompletion", calcHelper.calculateMetricComparison("%",
+                    fetchHabitCompletion(exp.getHabit().getId(), bStart, bEnd),
+                    fetchHabitCompletion(exp.getHabit().getId(), dStart, dEnd)));
+        }
+
         return new ExperimentAnalyticsDTO(
                 exp.getId(), userId, exp.getTitle(), exp.getHypothesis(),
                 metric, unit, exp.getStatus(),
                 bStart, bEnd, dStart, dEnd,
                 beforeAvg, duringAvg, absChange, pctChange,
-                beforeCount, duringCount, hasSufficient, direction, descriptiveResult
+                beforeCount, duringCount, hasSufficient, direction, descriptiveResult,
+                metricsMap
         );
     }
 
@@ -234,6 +257,15 @@ public class ExperimentAnalyticsService {
         return habitLogRepository.findByHabitIdAndLogDateBetween(habitId, start, end)
                 .stream()
                 .map(hl -> hl.isCompleted() ? 100.0 : 0.0)
+                .toList();
+    }
+
+    private List<Double> fetchWaterIntake(Long userId, LocalDate start, LocalDate end) {
+        return healthDataRepository.findByUserIdAndRecordDateBetweenOrderByRecordDateAsc(userId, start, end)
+                .stream()
+                .map(HealthData::getWaterIntakeMl)
+                .filter(Objects::nonNull)
+                .map(Integer::doubleValue)
                 .toList();
     }
 }
