@@ -1,0 +1,3 @@
+import React from 'react';
+
+/* CSS is imported at App level */
