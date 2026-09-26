@@ -90,6 +90,13 @@ public class HabitAnalyticsService {
         );
     }
 
+    public Optional<HabitAnalyticsDTO> getIndividualHabitAnalytics(Long habitId) {
+        if (habitId == null) {
+            return Optional.empty();
+        }
+        return habitRepository.findById(habitId).map(this::getIndividualHabitAnalytics);
+    }
+
     public HabitAnalyticsDTO getIndividualHabitAnalytics(Habit habit) {
         if (habit == null) {
             return new HabitAnalyticsDTO();
