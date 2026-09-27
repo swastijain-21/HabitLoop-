@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { getTodayDateStr, getCalendarDaysDiff, addCalendarDays, get7CalendarDays } from '../utils/dateUtils';
 
 const UserContext = createContext();
 
@@ -23,41 +24,114 @@ export const METRIC_CONFIG = {
   outdoor: { label: 'Outdoor Time', icon: '🌿', unit: 'mins avg', key: 'avgOutdoor', formatVal: (v) => `${v}m`, min: 0, max: 120, step: 15, defaultVal: 30 },
 };
 
-// Calculate experiment progress based strictly on ACTUAL logged experiment days
+// Calculate experiment progress based on 7 calendar days & actual logged experiment entries
 export function calculateExperimentProgress(experimentLogs, activeExperiment) {
   if (!activeExperiment || !activeExperiment.id || activeExperiment.status === 'none') {
-    return { trackedDays: 0, totalDays: 7, percentage: 0, isComplete: false, loggedEntries: [] };
+    return {
+      trackedDays: 0,
+      skippedDays: 0,
+      elapsedCalendarDays: 0,
+      totalDays: 7,
+      percentage: 0,
+      isComplete: false,
+      loggedEntries: [],
+      skippedEntries: [],
+      dailyStatusMap: {},
+      startDateStr: getTodayDateStr(),
+    };
   }
   
   const expId = activeExperiment.id;
-  const expLogs = Object.values(experimentLogs?.[expId] || {});
-  const loggedEntries = expLogs.filter(entry => entry && entry.completed !== undefined);
+  const expLogs = experimentLogs?.[expId] || {};
+  const expLogsList = Object.values(expLogs);
+
+  const loggedEntries = expLogsList.filter(entry => entry && entry.completed === true);
+  const skippedEntries = expLogsList.filter(entry => entry && entry.completed === false);
   const trackedDays = loggedEntries.length;
+  const skippedDays = skippedEntries.length;
   const totalDays = activeExperiment.durationDays || 7;
-  const percentage = Math.min(100, Math.round((trackedDays / totalDays) * 100));
-  const isComplete = trackedDays >= totalDays || activeExperiment.status === 'completed';
+
+  const startDateStr = activeExperiment.startDate || '2026-09-21';
+  const todayStr = getTodayDateStr();
+  
+  // Calculate calendar days elapsed from startDate to todayStr (1-indexed)
+  let elapsedCalendarDays = getCalendarDaysDiff(startDateStr, todayStr) + 1;
+  if (elapsedCalendarDays < 1) elapsedCalendarDays = 1;
+  if (elapsedCalendarDays > totalDays) elapsedCalendarDays = totalDays;
+
+  // Experiment is complete if 7 calendar days have elapsed or explicit status
+  const isComplete = elapsedCalendarDays >= totalDays ||
+                     (trackedDays + skippedDays) >= totalDays ||
+                     activeExperiment.status === 'completed';
+
+  const percentage = Math.min(100, Math.round((elapsedCalendarDays / totalDays) * 100));
+
+  // Build 7 calendar days status map
+  const days7List = get7CalendarDays(startDateStr);
+  const dailyStatusMap = {};
+  days7List.forEach((dateStr, idx) => {
+    const dayNum = idx + 1;
+    const dayKey = `day_${dayNum}`;
+    const logEntry = expLogs[dayKey] || Object.values(expLogs).find(l => l.date === dateStr);
+    
+    if (logEntry) {
+      if (logEntry.completed === true) {
+        dailyStatusMap[dayNum] = { status: 'logged', dateStr, entry: logEntry };
+      } else {
+        dailyStatusMap[dayNum] = { status: 'skipped', dateStr, entry: logEntry };
+      }
+    } else {
+      const diffFromToday = getCalendarDaysDiff(dateStr, todayStr);
+      if (diffFromToday < 0) {
+        // Past day with no log entry recorded
+        dailyStatusMap[dayNum] = { status: 'skipped', dateStr, entry: null };
+      } else if (diffFromToday === 0) {
+        dailyStatusMap[dayNum] = { status: 'today', dateStr, entry: null };
+      } else {
+        dailyStatusMap[dayNum] = { status: 'upcoming', dateStr, entry: null };
+      }
+    }
+  });
 
   return {
     trackedDays,
+    skippedDays,
+    elapsedCalendarDays,
     totalDays,
     percentage,
     isComplete,
     loggedEntries,
+    skippedEntries,
+    dailyStatusMap,
+    startDateStr,
   };
 }
 
 // Calculate Before vs After results from baseline and actual logged experiment entries
 export function calculateExperimentResults(experimentLogs, activeExperiment, weeklyLogs) {
   if (!activeExperiment || !activeExperiment.id || activeExperiment.status === 'none') {
-    return { comparisonCards: [], summaryText: 'No active experiment.', trackedDays: 0, totalDays: 7, isComplete: false };
+    return { comparisonCards: [], summaryText: 'No active experiment.', trackedDays: 0, skippedDays: 0, totalDays: 7, isComplete: false };
   }
 
   const expId = activeExperiment.id;
   const expLogs = Object.values(experimentLogs?.[expId] || {});
-  const validEntries = expLogs.filter(l => l && l.completed !== undefined);
+  
+  // Valid entries: ONLY entries where completed === true (actual logged entries)
+  const validEntries = expLogs.filter(l => l && l.completed === true);
+  const skippedEntries = expLogs.filter(l => l && l.completed === false);
   const trackedDays = validEntries.length;
+  const skippedDays = skippedEntries.length;
   const totalDays = activeExperiment.durationDays || 7;
-  const isComplete = trackedDays >= totalDays || activeExperiment.status === 'completed';
+
+  const startDateStr = activeExperiment.startDate || '2026-09-21';
+  const todayStr = getTodayDateStr();
+  let elapsedCalendarDays = getCalendarDaysDiff(startDateStr, todayStr) + 1;
+  if (elapsedCalendarDays < 1) elapsedCalendarDays = 1;
+  if (elapsedCalendarDays > totalDays) elapsedCalendarDays = totalDays;
+
+  const isComplete = elapsedCalendarDays >= totalDays ||
+                     (trackedDays + skippedDays) >= totalDays ||
+                     activeExperiment.status === 'completed';
 
   const preMetrics = calculateWeeklyMetrics(weeklyLogs);
 
@@ -83,7 +157,7 @@ export function calculateExperimentResults(experimentLogs, activeExperiment, wee
       else beforeVal = 0;
     }
 
-    // AFTER (Experiment Period Average)
+    // AFTER (Experiment Period Average - ONLY from valid entries with real values)
     const metricEntries = validEntries.filter(entry => entry[key] !== undefined && entry[key] !== null);
     
     let afterVal = null;
@@ -107,7 +181,6 @@ export function calculateExperimentResults(experimentLogs, activeExperiment, wee
     };
   });
 
-  // Pure observational summary wording
   const loggedWithData = comparisonCards.filter(c => c.hasData);
   let summaryText = '';
 
@@ -119,13 +192,16 @@ export function calculateExperimentResults(experimentLogs, activeExperiment, wee
 
       return `your average ${c.label.toLowerCase()} ${comparisonWord} (${c.formatVal(c.afterVal)} vs ${c.formatVal(c.beforeVal)} baseline)`;
     });
-    summaryText = `Over ${trackedDays} logged experiment day${trackedDays > 1 ? 's' : ''}, ${observations.join(', and ')}.`;
+    const skipNote = skippedDays > 0 ? ` (${skippedDays} day${skippedDays > 1 ? 's' : ''} skipped without log)` : '';
+    summaryText = `Over ${trackedDays} logged experiment day${trackedDays > 1 ? 's' : ''}${skipNote}, ${observations.join(', and ')}.`;
   } else {
-    summaryText = 'No experiment check-in entries logged yet. Log your daily experiment progress below to calculate Before vs After metrics.';
+    summaryText = 'No experiment check-in entries logged yet. Log your daily experiment progress to calculate Before vs After metrics.';
   }
 
   return {
     trackedDays,
+    skippedDays,
+    elapsedCalendarDays,
     totalDays,
     isComplete,
     comparisonCards,
@@ -293,195 +369,9 @@ export function generate7DayPlan(targetMetric, watchedMetrics = [], baseline = {
   return plans[metricKey] || plans.screenTime;
 }
 
-// Initial structured weekly time-series logs
-const initialWeeklyLogs = {
-  '2026-09-22': {
-    dateStr: '2026-09-22',
-    timestamp: '2026-09-22T00:00:00.000Z',
-    saved: true,
-    partiallyTracked: true,
-    sleep: 8.0,
-    movement: '45m',
-    screenTime: '2–4h',
-    focus: '2–4h',
-    energy: 4,
-    mood: 4,
-    mindfulness: '10m',
-    outdoor: '30m',
-    metrics: {
-      sleep_hours: 8.0,
-      movement_minutes: 45,
-      screen_time_hours: 3.0,
-      focus_hours: 3.0,
-      energy_score: 4,
-      mood_score: 4,
-      mindfulness_minutes: 10,
-      outdoor_minutes: 30,
-    },
-  },
-  '2026-09-23': {
-    dateStr: '2026-09-23',
-    timestamp: '2026-09-23T00:00:00.000Z',
-    saved: true,
-    partiallyTracked: true,
-    sleep: 7.5,
-    movement: '30m',
-    screenTime: '4–6h',
-    focus: '2–4h',
-    energy: 3,
-    mood: 4,
-    mindfulness: '10m',
-    outdoor: '15m',
-    metrics: {
-      sleep_hours: 7.5,
-      movement_minutes: 30,
-      screen_time_hours: 5.0,
-      focus_hours: 3.0,
-      energy_score: 3,
-      mood_score: 4,
-      mindfulness_minutes: 10,
-      outdoor_minutes: 15,
-    },
-  },
-  '2026-09-24': {
-    dateStr: '2026-09-24',
-    timestamp: '2026-09-24T00:00:00.000Z',
-    saved: true,
-    partiallyTracked: true,
-    sleep: 7.0,
-    movement: '30m',
-    screenTime: '4–6h',
-    focus: '4–6h',
-    energy: 3,
-    mood: 3,
-    mindfulness: '5m',
-    outdoor: '15m',
-    metrics: {
-      sleep_hours: 7.0,
-      movement_minutes: 30,
-      screen_time_hours: 5.0,
-      focus_hours: 5.0,
-      energy_score: 3,
-      mood_score: 3,
-      mindfulness_minutes: 5,
-      outdoor_minutes: 15,
-    },
-  },
-  '2026-09-25': {
-    dateStr: '2026-09-25',
-    timestamp: '2026-09-25T00:00:00.000Z',
-    saved: true,
-    partiallyTracked: true,
-    sleep: 7.5,
-    movement: '45m',
-    screenTime: '2–4h',
-    focus: '2–4h',
-    energy: 4,
-    mood: 4,
-    mindfulness: '15m',
-    outdoor: '30m',
-    metrics: {
-      sleep_hours: 7.5,
-      movement_minutes: 45,
-      screen_time_hours: 3.0,
-      focus_hours: 3.0,
-      energy_score: 4,
-      mood_score: 4,
-      mindfulness_minutes: 15,
-      outdoor_minutes: 30,
-    },
-  },
-  '2026-09-26': {
-    dateStr: '2026-09-26',
-    timestamp: '2026-09-26T00:00:00.000Z',
-    saved: true,
-    partiallyTracked: true,
-    sleep: 8.0,
-    movement: '60m',
-    screenTime: '<2h',
-    focus: '1–2h',
-    energy: 5,
-    mood: 5,
-    mindfulness: '20m',
-    outdoor: '60m+',
-    metrics: {
-      sleep_hours: 8.0,
-      movement_minutes: 60,
-      screen_time_hours: 1.5,
-      focus_hours: 1.5,
-      energy_score: 5,
-      mood_score: 5,
-      mindfulness_minutes: 20,
-      outdoor_minutes: 60,
-    },
-  },
-  '2026-09-27': {
-    dateStr: '2026-09-27',
-    timestamp: '2026-09-27T00:00:00.000Z',
-    saved: true,
-    partiallyTracked: true,
-    sleep: 8.5,
-    movement: '45m',
-    screenTime: '<2h',
-    focus: '1–2h',
-    energy: 4,
-    mood: 5,
-    mindfulness: '15m',
-    outdoor: '60m+',
-    metrics: {
-      sleep_hours: 8.5,
-      movement_minutes: 45,
-      screen_time_hours: 1.5,
-      focus_hours: 1.5,
-      energy_score: 4,
-      mood_score: 5,
-      mindfulness_minutes: 15,
-      outdoor_minutes: 60,
-    },
-  },
-  '2026-09-28': {
-    dateStr: '2026-09-28',
-    timestamp: '2026-09-28T00:00:00.000Z',
-    saved: true,
-    partiallyTracked: true,
-    sleep: 7.5,
-    movement: '30m',
-    screenTime: '2–4h',
-    focus: '4–6h',
-    energy: 4,
-    mood: 4,
-    mindfulness: '10m',
-    outdoor: '30m',
-    metrics: {
-      sleep_hours: 7.5,
-      movement_minutes: 30,
-      screen_time_hours: 3.0,
-      focus_hours: 5.0,
-      energy_score: 4,
-      mood_score: 4,
-      mindfulness_minutes: 10,
-      outdoor_minutes: 30,
-    },
-  },
-};
-
-// Storage keys & isolated per-user state helpers
-const ACTIVE_USER_EMAIL_KEY = 'habitloop_active_user_email';
-
-export function normalizeEmail(email) {
-  if (!email || typeof email !== 'string') return '';
-  return email.trim().toLowerCase();
-}
-
-export function getStorageKeyForEmail(email) {
-  const norm = normalizeEmail(email);
-  if (!norm) return 'habitloop_guest_user';
-  const cleanEmail = norm.replace(/[^a-z0-9_]/g, '_');
-  return `habitloop_user_${cleanEmail}`;
-}
-
-export function createEmptyWeeklyLogs() {
-  const days = ['2026-09-22', '2026-09-23', '2026-09-24', '2026-09-25', '2026-09-26', '2026-09-27', '2026-09-28'];
+// Create empty daily tracking logs for a 7-day calendar week starting on startDateStr
+export function createWeeklyLogsForDates(startDateStr = '2026-09-21') {
+  const days = get7CalendarDays(startDateStr);
   const logs = {};
   days.forEach(d => {
     logs[d] = {
@@ -503,6 +393,130 @@ export function createEmptyWeeklyLogs() {
   return logs;
 }
 
+// Initial structured weekly time-series logs for Week 1 (2026-09-21 to 2026-09-27)
+const initialWeeklyLogs = {
+  '2026-09-21': {
+    dateStr: '2026-09-21',
+    timestamp: '2026-09-21T00:00:00.000Z',
+    saved: true,
+    partiallyTracked: true,
+    sleep: 8.0,
+    movement: '45m',
+    screenTime: '2–4h',
+    focus: '2–4h',
+    energy: 4,
+    mood: 4,
+    mindfulness: '10m',
+    outdoor: '30m',
+    metrics: { sleep_hours: 8.0, movement_minutes: 45, screen_time_hours: 3.0, focus_hours: 3.0, energy_score: 4, mood_score: 4, mindfulness_minutes: 10, outdoor_minutes: 30 },
+  },
+  '2026-09-22': {
+    dateStr: '2026-09-22',
+    timestamp: '2026-09-22T00:00:00.000Z',
+    saved: true,
+    partiallyTracked: true,
+    sleep: 7.5,
+    movement: '30m',
+    screenTime: '4–6h',
+    focus: '2–4h',
+    energy: 3,
+    mood: 4,
+    mindfulness: '10m',
+    outdoor: '15m',
+    metrics: { sleep_hours: 7.5, movement_minutes: 30, screen_time_hours: 5.0, focus_hours: 3.0, energy_score: 3, mood_score: 4, mindfulness_minutes: 10, outdoor_minutes: 15 },
+  },
+  '2026-09-23': {
+    dateStr: '2026-09-23',
+    timestamp: '2026-09-23T00:00:00.000Z',
+    saved: true,
+    partiallyTracked: true,
+    sleep: 7.0,
+    movement: '30m',
+    screenTime: '4–6h',
+    focus: '4–6h',
+    energy: 3,
+    mood: 3,
+    mindfulness: '5m',
+    outdoor: '15m',
+    metrics: { sleep_hours: 7.0, movement_minutes: 30, screen_time_hours: 5.0, focus_hours: 5.0, energy_score: 3, mood_score: 3, mindfulness_minutes: 5, outdoor_minutes: 15 },
+  },
+  '2026-09-24': {
+    dateStr: '2026-09-24',
+    timestamp: '2026-09-24T00:00:00.000Z',
+    saved: true,
+    partiallyTracked: true,
+    sleep: 7.5,
+    movement: '45m',
+    screenTime: '2–4h',
+    focus: '2–4h',
+    energy: 4,
+    mood: 4,
+    mindfulness: '15m',
+    outdoor: '30m',
+    metrics: { sleep_hours: 7.5, movement_minutes: 45, screen_time_hours: 3.0, focus_hours: 3.0, energy_score: 4, mood_score: 4, mindfulness_minutes: 15, outdoor_minutes: 30 },
+  },
+  '2026-09-25': {
+    dateStr: '2026-09-25',
+    timestamp: '2026-09-25T00:00:00.000Z',
+    saved: true,
+    partiallyTracked: true,
+    sleep: 8.0,
+    movement: '60m',
+    screenTime: '<2h',
+    focus: '1–2h',
+    energy: 5,
+    mood: 5,
+    mindfulness: '20m',
+    outdoor: '60m+',
+    metrics: { sleep_hours: 8.0, movement_minutes: 60, screen_time_hours: 1.5, focus_hours: 1.5, energy_score: 5, mood_score: 5, mindfulness_minutes: 20, outdoor_minutes: 60 },
+  },
+  '2026-09-26': {
+    dateStr: '2026-09-26',
+    timestamp: '2026-09-26T00:00:00.000Z',
+    saved: true,
+    partiallyTracked: true,
+    sleep: 8.5,
+    movement: '45m',
+    screenTime: '<2h',
+    focus: '1–2h',
+    energy: 4,
+    mood: 5,
+    mindfulness: '15m',
+    outdoor: '60m+',
+    metrics: { sleep_hours: 8.5, movement_minutes: 45, screen_time_hours: 1.5, focus_hours: 1.5, energy_score: 4, mood_score: 5, mindfulness_minutes: 15, outdoor_minutes: 60 },
+  },
+  '2026-09-27': {
+    dateStr: '2026-09-27',
+    timestamp: '2026-09-27T00:00:00.000Z',
+    saved: true,
+    partiallyTracked: true,
+    sleep: 7.5,
+    movement: '30m',
+    screenTime: '2–4h',
+    focus: '4–6h',
+    energy: 4,
+    mood: 4,
+    mindfulness: '10m',
+    outdoor: '30m',
+    metrics: { sleep_hours: 7.5, movement_minutes: 30, screen_time_hours: 3.0, focus_hours: 5.0, energy_score: 4, mood_score: 4, mindfulness_minutes: 10, outdoor_minutes: 30 },
+  },
+};
+
+// Storage keys & isolated per-user state helpers
+const ACTIVE_USER_EMAIL_KEY = 'habitloop_active_user_email';
+
+export function normalizeEmail(email) {
+  if (!email || typeof email !== 'string') return '';
+  return email.trim().toLowerCase();
+}
+
+export function getStorageKeyForEmail(email) {
+  const norm = normalizeEmail(email);
+  if (!norm) return 'habitloop_guest_user';
+  const cleanEmail = norm.replace(/[^a-z0-9_]/g, '_');
+  return `habitloop_user_${cleanEmail}`;
+}
+
 export function createFreshUserState(userInfo = {}) {
   const normEmail = normalizeEmail(userInfo.email);
   const role = userInfo.role || userInfo.workStyle || 'Student';
@@ -518,7 +532,13 @@ export function createFreshUserState(userInfo = {}) {
       focusAreas: ['🌙 Sleep', '💧 Hydration', '🏃 Movement', '📚 Study & Work Balance'],
       goals: ['Improve sleep consistency', 'Drink more water', 'Take regular breaks'],
     },
-    weeklyLogs: createEmptyWeeklyLogs(),
+    currentWeek: {
+      weekNumber: 1,
+      weekStart: '2026-09-21',
+      weekEnd: '2026-09-27',
+    },
+    pastWeeks: [],
+    weeklyLogs: createWeeklyLogsForDates('2026-09-21'),
     weeklyContext: {
       mealRoutine: 'Mostly consistent',
       mealVariety: 'Good variety',
@@ -567,6 +587,16 @@ export function UserProvider({ children }) {
     goals: ['Improve sleep consistency', 'Drink more water', 'Take regular breaks'],
   });
 
+  // Current active week tracking definition
+  const [currentWeek, setCurrentWeek] = useState(initialData?.currentWeek || {
+    weekNumber: 1,
+    weekStart: '2026-09-21',
+    weekEnd: '2026-09-27',
+  });
+
+  // Historical completed weeks archive
+  const [pastWeeks, setPastWeeks] = useState(initialData?.pastWeeks || []);
+
   const [weeklyCheckin, setWeeklyCheckin] = useState({
     sleepHours: 7.5,
     hydrationLiters: 2.0,
@@ -587,8 +617,8 @@ export function UserProvider({ children }) {
     { id: 'studyBreak', label: 'Study Break', unit: 'Sessions', val: 2, target: 3, icon: '📚', color: 'amber' },
   ]);
 
-  // Structured time-series weekly daily logs (Empty for new users, isolated per email)
-  const [weeklyLogs, setWeeklyLogs] = useState(initialData?.weeklyLogs || createEmptyWeeklyLogs());
+  // Structured time-series weekly daily logs (Isolated per user)
+  const [weeklyLogs, setWeeklyLogs] = useState(initialData?.weeklyLogs || initialWeeklyLogs);
 
   // Weekly Nutrition + Lifestyle Context state
   const [weeklyContext, setWeeklyContext] = useState(initialData?.weeklyContext || {
@@ -599,7 +629,7 @@ export function UserProvider({ children }) {
     scheduleMealImpact: 'Sometimes',
     routineManageability: 'Mostly manageable',
     notes: '',
-    saved: false,
+    saved: true,
   });
 
   // Experiment logs state
@@ -635,7 +665,9 @@ export function UserProvider({ children }) {
             focusAreas: ['🌙 Sleep', '💧 Hydration', '🏃 Movement', '📚 Study & Work Balance'],
             goals: ['Improve sleep consistency', 'Drink more water', 'Take regular breaks'],
           },
-          weeklyLogs: parsed.weeklyLogs || createEmptyWeeklyLogs(),
+          currentWeek: parsed.currentWeek || { weekNumber: 1, weekStart: '2026-09-21', weekEnd: '2026-09-27' },
+          pastWeeks: parsed.pastWeeks || [],
+          weeklyLogs: parsed.weeklyLogs || initialWeeklyLogs,
           weeklyContext: parsed.weeklyContext || {
             mealRoutine: 'Mostly consistent',
             mealVariety: 'Good variety',
@@ -644,7 +676,7 @@ export function UserProvider({ children }) {
             scheduleMealImpact: 'Sometimes',
             routineManageability: 'Mostly manageable',
             notes: '',
-            saved: false,
+            saved: true,
           },
           activeExperiment: parsed.activeExperiment || null,
           experimentLogs: parsed.experimentLogs || {},
@@ -661,6 +693,8 @@ export function UserProvider({ children }) {
 
     setUser(newUserState.user);
     setOnboardingData(newUserState.onboardingData);
+    setCurrentWeek(newUserState.currentWeek);
+    setPastWeeks(newUserState.pastWeeks);
     setWeeklyLogs(newUserState.weeklyLogs);
     setWeeklyContext(newUserState.weeklyContext);
     setActiveExperiment(newUserState.activeExperiment);
@@ -688,6 +722,8 @@ export function UserProvider({ children }) {
         const payload = {
           user: updatedUser,
           onboardingData,
+          currentWeek,
+          pastWeeks,
           weeklyLogs,
           weeklyContext,
           activeExperiment,
@@ -735,6 +771,8 @@ export function UserProvider({ children }) {
     const payload = {
       user: { ...user, email: cleanNew },
       onboardingData,
+      currentWeek,
+      pastWeeks,
       weeklyLogs,
       weeklyContext,
       activeExperiment,
@@ -761,6 +799,8 @@ export function UserProvider({ children }) {
       const payload = {
         user: { ...user, email: normEmail },
         onboardingData,
+        currentWeek,
+        pastWeeks,
         weeklyLogs,
         weeklyContext,
         activeExperiment,
@@ -770,7 +810,7 @@ export function UserProvider({ children }) {
       localStorage.setItem(storageKey, JSON.stringify(payload));
       localStorage.setItem(ACTIVE_USER_EMAIL_KEY, normEmail);
     }
-  }, [user, onboardingData, weeklyLogs, weeklyContext, activeExperiment, experimentLogs, experimentHistory]);
+  }, [user, onboardingData, currentWeek, pastWeeks, weeklyLogs, weeklyContext, activeExperiment, experimentLogs, experimentHistory]);
 
   // Increment activity action
   const incrementActivity = (id, amount = 1) => {
@@ -779,23 +819,26 @@ export function UserProvider({ children }) {
     );
   };
 
-  // Log a daily experiment check-in entry
+  // Log a daily experiment check-in entry (mapped to current calendar day)
   const logExperimentDay = (experimentId, dayLogData) => {
     const expId = experimentId || activeExperiment?.id;
     if (!expId) return;
 
+    const startDateStr = activeExperiment?.startDate || '2026-09-21';
+    const todayStr = getTodayDateStr();
+    // Calculate calendar day number (1-indexed)
+    const calendarDayNum = Math.min(7, Math.max(1, getCalendarDaysDiff(startDateStr, todayStr) + 1));
+    const dayKey = `day_${calendarDayNum}`;
+
     setExperimentLogs(prev => {
       const currentExpLogs = prev[expId] || {};
-      const existingDaysCount = Object.keys(currentExpLogs).length;
-      const nextDayNum = existingDaysCount + 1;
-      const dayKey = `day_${nextDayNum}`;
 
       const newLogEntry = {
-        dayNumber: nextDayNum,
+        dayNumber: calendarDayNum,
         timestamp: new Date().toISOString(),
-        date: new Date().toISOString().split('T')[0],
+        date: todayStr,
         completed: dayLogData?.completed ?? true,
-        ...dayLogData,
+        ...(dayLogData?.completed ? dayLogData : {}),
       };
 
       return {
@@ -829,7 +872,7 @@ export function UserProvider({ children }) {
       baseline: baselineData,
       dailyPlan: dailyPlan,
       status: 'active',
-      startDate: new Date().toISOString().split('T')[0],
+      startDate: getTodayDateStr(),
       decision: null,
     };
 
@@ -847,10 +890,95 @@ export function UserProvider({ children }) {
       ...activeExperiment,
       status: 'completed',
       decision, // 'keep' | 'drop'
-      completedDate: new Date().toISOString().split('T')[0],
+      completedDate: getTodayDateStr(),
     };
     setActiveExperiment(finishedExp);
-    setExperimentHistory(prev => [finishedExp, ...prev]);
+    setExperimentHistory(prev => {
+      if (prev.some(h => h.id === finishedExp.id)) {
+        return prev.map(h => h.id === finishedExp.id ? finishedExp : h);
+      }
+      return [finishedExp, ...prev];
+    });
+  };
+
+  // AUTOMATIC NEXT-WEEK HABITLOOP CYCLE TRANSITION
+  const completeCurrentWeekAndStartNext = () => {
+    const currStart = currentWeek.weekStart; // e.g. "2026-09-21"
+    const currEnd = currentWeek.weekEnd;     // e.g. "2026-09-27"
+    const nextStart = addCalendarDays(currEnd, 1); // e.g. "2026-09-28"
+    const nextEnd = addCalendarDays(nextStart, 6); // e.g. "2026-10-04"
+
+    // Calculate current week score
+    const metrics = calculateWeeklyMetrics(weeklyLogs);
+    const factorScores = getFactorScores(weeklyLogs);
+    let totalScore = 0;
+    WELLNESS_FACTORS.forEach(f => {
+      totalScore += (factorScores[f.id] || 50) * f.weight;
+    });
+    const wellnessScore = Math.round(totalScore);
+
+    // Finalize current active experiment if present
+    let archivedExp = null;
+    if (activeExperiment && activeExperiment.status !== 'none') {
+      archivedExp = {
+        ...activeExperiment,
+        status: 'completed',
+        completedDate: getTodayDateStr(),
+        decision: activeExperiment.decision || 'keep',
+      };
+    }
+
+    // Build historical week record
+    const completedWeekRecord = {
+      weekNumber: currentWeek.weekNumber,
+      weekStart: currStart,
+      weekEnd: currEnd,
+      completedAt: getTodayDateStr(),
+      weeklyLogs: { ...weeklyLogs },
+      weeklyContext: { ...weeklyContext },
+      wellnessScore,
+      experiment: archivedExp,
+      experimentLogs: { ...experimentLogs },
+    };
+
+    // Archive completed week into pastWeeks
+    setPastWeeks(prev => [...prev.filter(w => w.weekNumber !== currentWeek.weekNumber), completedWeekRecord]);
+
+    // Push completed experiment into experimentHistory
+    if (archivedExp) {
+      setExperimentHistory(prev => {
+        if (prev.some(h => h.id === archivedExp.id)) return prev;
+        return [archivedExp, ...prev];
+      });
+    }
+
+    // Move active experiment into history (no longer active on screen)
+    setActiveExperiment(null);
+
+    // Activate next week dynamically
+    const nextWeekNumber = currentWeek.weekNumber + 1;
+    const newWeeklyLogs = createWeeklyLogsForDates(nextStart);
+
+    setCurrentWeek({
+      weekNumber: nextWeekNumber,
+      weekStart: nextStart,
+      weekEnd: nextEnd,
+    });
+
+    setWeeklyLogs(newWeeklyLogs);
+
+    setWeeklyContext({
+      mealRoutine: 'Mostly consistent',
+      mealVariety: 'Good variety',
+      fruitVegetableFrequency: 'Most days',
+      hydrationHabits: 'Mostly consistent',
+      scheduleMealImpact: 'Sometimes',
+      routineManageability: 'Mostly manageable',
+      notes: '',
+      saved: false,
+    });
+
+    return { nextWeekNumber, nextStart, nextEnd };
   };
 
   // Helper to calculate 0-100 scores for all 8 primary wellness factors from weekly logs
@@ -904,11 +1032,6 @@ export function UserProvider({ children }) {
   };
 
   // Deterministic pattern-based recommendation engine (Pure function, does NOT mutate state)
-  // HIERARCHY:
-  // 1. Evaluate the 8 primary wellness factors first -> Identify primaryTarget factor
-  // 2. Inspect Nutrition & Lifestyle context -> Refine recommendation IF relevant
-  // 3. Inspect Lifestyle / Work Style -> Tailor action copy & daily plan for routine
-  // 4. Target metric MUST ALWAYS be one of the 8 primary factors
   const getPatternRecommendation = () => {
     const metrics = calculateWeeklyMetrics(weeklyLogs);
     const scores = getFactorScores(weeklyLogs);
@@ -1248,7 +1371,13 @@ export function UserProvider({ children }) {
       focusAreas: ['🌙 Sleep', '💧 Hydration', '🏃 Movement', '📚 Study & Work Balance'],
       goals: ['Improve sleep consistency', 'Drink more water', 'Take regular breaks'],
     });
-    setWeeklyLogs(createEmptyWeeklyLogs());
+    setCurrentWeek({
+      weekNumber: 1,
+      weekStart: '2026-09-21',
+      weekEnd: '2026-09-27',
+    });
+    setPastWeeks([]);
+    setWeeklyLogs(createWeeklyLogsForDates('2026-09-21'));
     setWeeklyContext({
       mealRoutine: 'Mostly consistent',
       mealVariety: 'Good variety',
@@ -1279,6 +1408,11 @@ export function UserProvider({ children }) {
         signOut,
         onboardingData,
         setOnboardingData,
+        currentWeek,
+        setCurrentWeek,
+        pastWeeks,
+        setPastWeeks,
+        completeCurrentWeekAndStartNext,
         weeklyCheckin,
         setWeeklyCheckin,
         weeklyContext,

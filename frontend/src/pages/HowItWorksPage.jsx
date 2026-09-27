@@ -1,221 +1,331 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Calendar, Sparkles, BarChart2, Lightbulb, RotateCcw, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { 
+  Sparkles, 
+  Activity, 
+  BarChart2, 
+  FlaskConical, 
+  TrendingUp, 
+  Lightbulb, 
+  RotateCcw, 
+  CheckCircle2, 
+  Layers,
+  ArrowRight,
+  Utensils,
+  Bot,
+  CalendarCheck,
+  Scale
+} from 'lucide-react';
 
 export default function HowItWorksPage() {
-  const [activeStep, setActiveStep] = useState(1);
+  const [activeStageId, setActiveStageId] = useState(1);
 
-  const steps = [
+  // Section 2 & 3 Data: The 6 Stages
+  const stages = [
     {
       id: 1,
       num: '01',
-      title: 'Weekly Check-in',
-      subtitle: 'Set Intentions & Flexible Goals',
-      icon: Calendar,
-      color: 'bg-emerald-500',
-      tagColor: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-      description: 'Every Sunday, set realistic 7-day habit intentions based on your upcoming workload, exam schedule, or personal energy levels.',
-      details: [
-        'Adjust habit intensity based on week difficulty',
-        'Set simple targets for sleep, hydration & focus',
-        'Zero pressure from past missed days'
-      ],
-      demoBox: {
-        title: 'Sunday Intentions Set',
-        badge: 'Example Target',
-        items: [
-          { label: 'Sleep Goal', val: '7.5 hrs / night' },
-          { label: 'Hydration Goal', val: '2.5 Liters / day' },
-          { label: 'Study Focus', val: '90 mins / day' }
-        ]
-      }
+      title: 'TRACK',
+      subtitle: 'Daily Micro-Logging',
+      icon: Activity,
+      colorTheme: 'stage-green',
+      summary: 'Users record their daily wellness factors such as sleep, movement, screen time, focus, energy, mood, mindfulness, and outdoor time.',
+      factorsList: ['Sleep Hours', 'Movement', 'Screen Time', 'Study Focus', 'Energy Rating', 'Mood & Wellbeing', 'Mindfulness', 'Outdoor Time'],
+      keyTakeaway: 'Fast 30-second daily micro-log with zero guilt if a day is missed.'
     },
     {
       id: 2,
       num: '02',
-      title: 'Track Your Week',
-      subtitle: 'Simple Daily Micro-Logging',
-      icon: Sparkles,
-      color: 'bg-blue-500',
-      tagColor: 'bg-blue-50 text-blue-800 border-blue-200',
-      description: 'Log your daily metrics in under 30 seconds with clean tap-and-go widgets. No complex forms or endless inputs.',
-      details: [
-        'Quick 1-tap habit logging',
-        'Optional wearable & calendar sync',
-        'Track mood and energy slumps effortlessly'
-      ],
-      demoBox: {
-        title: 'Daily Micro-Checkin',
-        badge: 'Wednesday • Demo Log',
-        items: [
-          { label: 'Hydration', val: '2.5 L (Target Met)' },
-          { label: 'Pomodoro Focus', val: '2 Sessions (90 mins)' },
-          { label: 'Evening Unplug', val: '20 mins rest' }
-        ]
-      }
+      title: 'UNDERSTAND',
+      subtitle: 'Pattern Identification',
+      icon: BarChart2,
+      colorTheme: 'stage-blue',
+      summary: 'At the end of the week, HabitLoop reviews the user\'s logged data and identifies patterns, stronger areas, and areas that may need attention.',
+      factorsList: ['Weekly Score / 100', 'Energy Drain Detection', 'Focus & Sleep Correlation', 'Burnout Early Warning'],
+      keyTakeaway: 'Automated 7-day pattern insights showing what energized or drained your week.'
     },
     {
       id: 3,
       num: '03',
-      title: 'Weekly Evaluation',
-      subtitle: 'Clear Summary & Insights',
-      icon: BarChart2,
-      color: 'bg-purple-500',
-      tagColor: 'bg-purple-50 text-purple-800 border-purple-200',
-      description: 'At the end of 7 days, HabitLoop calculates your overall Weekly Wellness Index score and highlights what energized your week.',
-      details: [
-        'Automated 7-day performance breakdown',
-        'Early awareness of fatigue & energy drains',
-        'Focus on progress over perfection'
-      ],
-      demoBox: {
-        title: 'Weekly Summary Report',
-        badge: 'Score: 88 / 100',
-        items: [
-          { label: 'Sleep Quality', val: '7.8 hrs average' },
-          { label: 'Focus Consistency', val: '5 days completed' },
-          { label: 'Energy Rating', val: 'High / Stable' }
-        ]
-      }
+      title: 'EXPERIMENT',
+      subtitle: 'Single Focus Action',
+      icon: FlaskConical,
+      colorTheme: 'stage-purple',
+      summary: 'HabitLoop suggests one small, practical change based primarily on the user\'s wellness patterns.',
+      factorsList: ['1 Micro-Change Focus', 'Tailored AI Suggestion', '7-Day Duration', 'Clear Hypothesis'],
+      keyTakeaway: 'Focusing on exactly 1 experiment at a time prevents habit overwhelm.'
     },
     {
       id: 4,
       num: '04',
-      title: 'Personalized Recommendations',
-      subtitle: '2-3 Tailored Micro-Adjustments',
-      icon: Lightbulb,
-      color: 'bg-orange-500',
-      tagColor: 'bg-orange-50 text-orange-800 border-orange-200',
-      description: 'Receive 2 to 3 targeted micro-adjustments custom-tailored for your upcoming week based on your actual data.',
-      details: [
-        'Hyper-focused weekly action items',
-        'Adapted to your personal schedule',
-        'Eliminates habit overwhelm'
-      ],
-      demoBox: {
-        title: 'AI Recommendation Demo',
-        badge: 'Suggested Adjustments',
-        items: [
-          { label: 'Bedtime Shift', val: '10:45 PM target' },
-          { label: 'Hydration Boost', val: '+500ml pre-study' },
-          { label: 'Active Walk', val: '20 mins weekend walk' }
-        ]
-      }
+      title: 'MEASURE',
+      subtitle: '7-Day Active Trial',
+      icon: TrendingUp,
+      colorTheme: 'stage-orange',
+      summary: 'The user follows the suggested change for 7 days while continuing to track relevant metrics.',
+      factorsList: ['Daily Progress Bar', 'Watched Metrics Tracking', 'Baseline Comparison', '7-Day Trial Window'],
+      keyTakeaway: 'Gather real data over 7 days while keeping your daily routine intact.'
     },
     {
       id: 5,
       num: '05',
-      title: 'Improve & Repeat',
-      subtitle: 'Continuous Compound Growth',
+      title: 'IMPROVE',
+      subtitle: 'Baseline vs. Test Analysis',
+      icon: Lightbulb,
+      colorTheme: 'stage-teal',
+      summary: 'HabitLoop compares the experiment period with the user\'s baseline to help the user understand what changed.',
+      factorsList: ['Side-by-Side Comparison', 'Objective Impact Score', 'Adopt Habit Option', 'Zero Guilt if Dropped'],
+      keyTakeaway: 'Keep changes that work, drop what doesn\'t, and compound 1% weekly gains.'
+    },
+    {
+      id: 6,
+      num: '06',
+      title: 'REPEAT',
+      subtitle: 'Continuous Loop Reset',
       icon: RotateCcw,
-      color: 'bg-emerald-600',
-      tagColor: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-      description: 'Watch your weekly wellness score improve naturally week after week. No broken streak guilt—just steady growth.',
-      details: [
-        'Streak recovery shield keeps your motivation high',
-        'Compound small wins over time',
-        'Build lifelong sustainable habits'
-      ],
-      demoBox: {
-        title: 'Habit Mastery Progress',
-        badge: 'Week 6 Compound',
-        items: [
-          { label: 'Active Weekly Loops', val: '6 Consecutive Weeks' },
-          { label: 'Average Score', val: '86 / 100' },
-          { label: 'Primary Win', val: 'Consistent sleep rhythm' }
-        ]
-      }
+      colorTheme: 'stage-emerald',
+      summary: 'The user begins the next weekly loop and continues learning from their own data.',
+      factorsList: ['Sunday Intentions Reset', 'Streak Armor Active', 'Adaptive Goals', 'Long-Term Compound Growth'],
+      keyTakeaway: 'Every Sunday starts a clean new loop—no broken streak penalties.'
     }
   ];
 
-  const current = steps.find(s => s.id === activeStep);
+  const activeStage = stages.find(s => s.id === activeStageId) || stages[0];
+
+  // Section 4 Data: Feature Flow Nodes
+  const featureNodes = [
+    { num: '01', title: 'DAILY TRACKING', desc: 'Log 8 wellness factors daily', icon: Activity, tag: 'Daily' },
+    { num: '02', title: 'WEEKLY EVALUATION', desc: 'Aggregate 7-day pattern data', icon: BarChart2, tag: 'Sunday' },
+    { num: '03', title: 'AI WELLNESS COACH', desc: 'Analyze trends & correlations', icon: Bot, tag: 'Analysis' },
+    { num: '04', title: 'ONE RECOMMENDATION', desc: 'Generate 1 practical micro-change', icon: Lightbulb, tag: 'Insight' },
+    { num: '05', title: '7-DAY EXPERIMENT', desc: 'Test target change for 1 week', icon: FlaskConical, tag: 'Active' },
+    { num: '06', title: 'BEFORE vs AFTER', desc: 'Compare test metrics to baseline', icon: Scale, tag: 'Result' },
+    { num: '07', title: 'NEXT WEEK', desc: 'Adopt win & start fresh loop', icon: RotateCcw, tag: 'Repeat' },
+  ];
+
+  // Section 5 Data: Nutrition & Lifestyle Context Flow
+  const contextFlowNodes = [
+    { title: '8 WELLNESS FACTORS', sub: 'Sleep, Focus, Movement, Energy, Mood, Screen Time, Outdoor, Mindfulness', highlight: false },
+    { title: 'MAIN WELLNESS PATTERNS', sub: 'Calculates weekly score & pattern trends', highlight: false },
+    { title: 'NUTRITION & LIFESTYLE CONTEXT', sub: 'Adds optional qualitative layer (Hydration, Meals, Caffeine, Routine)', highlight: true },
+    { title: 'REFINED RECOMMENDATION', sub: 'Generates hyper-tailored micro-experiments', highlight: false },
+    { title: '7-DAY EXPERIMENT', sub: 'Measures exact 1-week impact', highlight: false },
+  ];
 
   return (
-    <div className="py-12 md:py-20 space-y-16">
-      <div className="container max-w-3xl text-center">
-        <h1 className="text-3xl md:text-5xl font-extrabold text-slate-900 mb-4">
-          How HabitLoop Works
-        </h1>
-        <p className="text-base md:text-lg text-slate-600 leading-relaxed">
-          The 5-step weekly improvement loop designed to build sustainable wellness habits without streak anxiety.
-        </p>
-      </div>
+    <div className="howitworks-page-wrapper">
+      <div className="container">
+        
+        {/* 1. HOW HABITLOOP WORKS — HERO INTRO */}
+        <section className="howitworks-hero-section">
+          <div className="howitworks-eyebrow">
+            <Sparkles size={14} />
+            <span>HOW HABITLOOP WORKS</span>
+          </div>
+          <h1 className="howitworks-hero-title">
+            Understanding the <span className="gradient-text-hero">HabitLoop System</span>
+          </h1>
+          <p className="howitworks-hero-description">
+            HabitLoop is a continuous weekly wellness framework designed to replace streak anxiety with practical, data-driven micro-experiments tailored to your actual life.
+          </p>
+        </section>
 
-      {/* Step Buttons */}
-      <div className="container max-w-4xl">
-        <div className="flex items-center justify-between gap-2 overflow-x-auto pb-4">
-          {steps.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setActiveStep(s.id)}
-              className={`flex-1 min-w-[130px] p-4 rounded-2xl border text-center transition-all ${
-                activeStep === s.id 
-                  ? 'bg-white border-emerald-500 shadow-sm font-bold' 
-                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-white'
-              }`}
-            >
-              <div className="text-xs font-extrabold text-slate-400 mb-1">{s.num}</div>
-              <div className="text-xs font-bold text-slate-900">{s.title}</div>
-            </button>
-          ))}
-        </div>
-
-        {/* Selected Step Display */}
-        <div className="mt-8 bg-white border border-slate-200 rounded-3xl p-6 md:p-10 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-          <div>
-            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold border ${current.tagColor} mb-4`}>
-              <span>Step {current.num}</span>
-            </div>
-            <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 mb-2">
-              {current.title}
-            </h2>
-            <p className="text-sm font-bold text-emerald-600 mb-4">{current.subtitle}</p>
-            <p className="text-sm text-slate-600 leading-relaxed mb-6">{current.description}</p>
-
-            <ul className="space-y-2.5 mb-6">
-              {current.details.map((d, i) => (
-                <li key={i} className="flex items-center gap-2 text-xs md:text-sm font-semibold text-slate-800">
-                  <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
-                  <span>{d}</span>
-                </li>
-              ))}
-            </ul>
-
-            <button 
-              onClick={() => setActiveStep((prev) => (prev % 5) + 1)}
-              className="btn btn-secondary btn-sm"
-            >
-              <span>Next Step ({((activeStep) % 5) + 1} / 5)</span>
-              <ArrowRight size={14} />
-            </button>
+        {/* 2. THE HABITLOOP LOOP — 6 STAGE RIBBON */}
+        <section className="howitworks-loop-section">
+          <div className="loop-header-clean text-center">
+            <h2 className="section-heading-sm">THE HABITLOOP CYCLE</h2>
+            <p className="section-sub-sm">
+              A continuous 6-stage loop that transforms daily awareness into sustainable habits.
+            </p>
           </div>
 
-          {/* Demo Box */}
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-4">
-              <span className="font-extrabold text-sm text-slate-900">{current.demoBox.title}</span>
-              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700">
-                {current.demoBox.badge}
-              </span>
-            </div>
-
-            <div className="space-y-3">
-              {current.demoBox.items.map((item, idx) => (
-                <div key={idx} className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between text-xs font-semibold">
-                  <span className="text-slate-600">{item.label}</span>
-                  <span className="text-slate-900 font-extrabold">{item.val}</span>
+          {/* 6-Stage Interactive Horizontal Loop Track */}
+          <div className="stage-ribbon-grid">
+            {stages.map((s, idx) => {
+              const StageIcon = s.icon;
+              const isSelected = activeStageId === s.id;
+              return (
+                <div key={s.id} className="stage-ribbon-item">
+                  <button
+                    type="button"
+                    onClick={() => setActiveStageId(s.id)}
+                    className={`stage-pill-btn ${s.colorTheme} ${isSelected ? 'active' : ''}`}
+                  >
+                    <span className="stage-num-tag">{s.num}</span>
+                    <StageIcon size={16} className="stage-pill-icon" />
+                    <span className="stage-pill-title">{s.title}</span>
+                  </button>
+                  {idx < stages.length - 1 && <span className="stage-ribbon-arrow">→</span>}
                 </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* 3. WHAT HAPPENS AT EACH STAGE */}
+        <section className="howitworks-stages-detail-section">
+          <div className="section-header-block text-center">
+            <h2 className="section-title-lg">What Happens at Each Stage</h2>
+            <p className="section-desc-md">
+              Select a stage above or explore how each phase builds upon your personal wellness data.
+            </p>
+          </div>
+
+          {/* Interactive Stage Showcase Box */}
+          <div className="stage-detail-card">
+            <div className="stage-detail-main">
+              <div className="stage-header-badge-row">
+                <span className="stage-active-badge">
+                  STAGE {activeStage.num} • {activeStage.title}
+                </span>
+                <span className="stage-subtitle-text">{activeStage.subtitle}</span>
+              </div>
+
+              <h3 className="stage-detail-heading">{activeStage.title}: {activeStage.subtitle}</h3>
+              <p className="stage-detail-paragraph">{activeStage.summary}</p>
+
+              <div className="stage-takeaway-box">
+                <span className="takeaway-label">Key Takeaway:</span>
+                <span className="takeaway-text">{activeStage.keyTakeaway}</span>
+              </div>
+
+              <div className="stage-nav-buttons">
+                <button
+                  type="button"
+                  onClick={() => setActiveStageId((prev) => (prev % 6) + 1)}
+                  className="btn btn-secondary btn-sm"
+                >
+                  <span>Explore Next Stage ({((activeStageId) % 6) + 1} of 6)</span>
+                  <ArrowRight size={14} />
+                </button>
+              </div>
+            </div>
+
+            {/* Stage Factor / Highlights List */}
+            <div className="stage-detail-sidebar">
+              <div className="sidebar-header-title">Stage Components</div>
+              <ul className="stage-factors-list">
+                {activeStage.factorsList.map((factor, idx) => (
+                  <li key={idx} className="stage-factor-item">
+                    <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+                    <span>{factor}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* 6 Grid Cards for Quick Overview of All Stages */}
+          <div className="all-stages-grid">
+            {stages.map((stg) => {
+              const StgIcon = stg.icon;
+              return (
+                <div 
+                  key={stg.id} 
+                  onClick={() => setActiveStageId(stg.id)}
+                  className={`stage-overview-card ${activeStageId === stg.id ? 'focused' : ''}`}
+                >
+                  <div className="overview-card-top">
+                    <span className="overview-num">{stg.num}</span>
+                    <StgIcon size={18} className="overview-icon" />
+                  </div>
+                  <h4 className="overview-title">{stg.title}</h4>
+                  <p className="overview-summary">{stg.summary}</p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* 4. HOW THE FEATURES CONNECT (VISUAL PRODUCT FLOW) */}
+        <section className="howitworks-feature-connect-section">
+          <div className="section-header-block text-center">
+            <h2 className="section-title-lg">How the Features Connect</h2>
+            <p className="section-desc-md">
+              From daily micro-logs to 7-day experiments, here is how the application components connect into a unified experience.
+            </p>
+          </div>
+
+          <div className="feature-flow-container">
+            <div className="feature-flow-track">
+              {featureNodes.map((node, i) => {
+                const NodeIcon = node.icon;
+                return (
+                  <React.Fragment key={i}>
+                    <div className="feature-flow-node">
+                      <div className="flow-node-header">
+                        <span className="flow-node-num">{node.num}</span>
+                        <span className="flow-node-tag">{node.tag}</span>
+                      </div>
+                      <div className="flow-node-body">
+                        <div className="flow-node-icon-box">
+                          <NodeIcon size={18} />
+                        </div>
+                        <h4 className="flow-node-title">{node.title}</h4>
+                        <p className="flow-node-desc">{node.desc}</p>
+                      </div>
+                    </div>
+                    {i < featureNodes.length - 1 && (
+                      <div className="flow-connector-arrow">
+                        <span>→</span>
+                      </div>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* 5. NUTRITION & LIFESTYLE CONTEXT */}
+        <section className="howitworks-context-section">
+          <div className="context-card-panel">
+            <div className="context-header-col">
+              <div className="context-tag">
+                <Utensils size={14} />
+                <span>SUPPORTING CONTEXT LAYER</span>
+              </div>
+              <h2 className="context-title">Nutrition & Lifestyle Context</h2>
+              <p className="context-desc">
+                HabitLoop separates your core 8 wellness factors from supporting lifestyle context. Details like hydration, meal balance, caffeine, and workload stress serve as a qualitative layer to refine AI recommendations—without altering your core 8 factor scores.
+              </p>
+            </div>
+
+            {/* Context Layer Flow Diagram */}
+            <div className="context-flow-diagram">
+              {contextFlowNodes.map((item, idx) => (
+                <React.Fragment key={idx}>
+                  <div className={`context-flow-item ${item.highlight ? 'context-highlight' : ''}`}>
+                    <div className="context-item-top">
+                      <span className="context-item-step">0{idx + 1}</span>
+                      <span className="context-item-title">{item.title}</span>
+                    </div>
+                    <span className="context-item-sub">{item.sub}</span>
+                  </div>
+                  {idx < contextFlowNodes.length - 1 && (
+                    <div className="context-arrow-down">↓</div>
+                  )}
+                </React.Fragment>
               ))}
             </div>
           </div>
-        </div>
-      </div>
+        </section>
 
-      <div className="container text-center pt-8">
-        <Link to="/signup" className="btn btn-primary btn-lg">
-          <span>Start Your Loop</span>
-          <ArrowRight size={18} />
-        </Link>
+        {/* 6. INFORMATIONAL ENDING (BRAND STATEMENT - NO CTA) */}
+        <section className="howitworks-ending-section">
+          <div className="ending-statement-card">
+            <div className="ending-icon-box">
+              <RotateCcw size={28} />
+            </div>
+            <h2 className="ending-statement-quote">
+              "Track your week. Understand your patterns. Try one small change. Repeat."
+            </h2>
+            <div className="ending-divider-line" />
+            <span className="ending-brand-subtext">
+              The HabitLoop Philosophy • Sustainable Wellness Through Continuous 7-Day Experiments
+            </span>
+          </div>
+        </section>
+
       </div>
     </div>
   );

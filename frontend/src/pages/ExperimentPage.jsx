@@ -77,29 +77,30 @@ export default function ExperimentPage() {
   }
 
   const exp = activeExperiment;
+  const { completeCurrentWeekAndStartNext } = useUser();
   const [decisionState, setDecisionState] = useState(exp.decision || null);
   const [logSuccessMsg, setLogSuccessMsg] = useState('');
 
   // Dynamic progress & results calculated strictly from experimentLogs
   const expProgress = calculateExperimentProgress 
     ? calculateExperimentProgress(exp) 
-    : { trackedDays: 0, totalDays: 7, percentage: 0, isComplete: false };
+    : { trackedDays: 0, skippedDays: 0, elapsedCalendarDays: 1, totalDays: 7, percentage: 0, isComplete: false, dailyStatusMap: {} };
 
   const expResults = calculateExperimentResults 
     ? calculateExperimentResults(exp) 
-    : { comparisonCards: [], summaryText: '', trackedDays: 0, totalDays: 7 };
+    : { comparisonCards: [], summaryText: '', trackedDays: 0, skippedDays: 0, totalDays: 7 };
 
-  // Current day index derived strictly from completed logged entries
-  const currentDayIndex = Math.min(6, Math.max(0, expProgress.trackedDays));
-  const currentDayNumber = Math.min(7, expProgress.trackedDays + 1);
+  // Current calendar day (1-7) derived from startDate to today
+  const calendarDayNum = Math.min(7, Math.max(1, expProgress.elapsedCalendarDays || 1));
+  const currentPlanIndex = Math.min(6, Math.max(0, calendarDayNum - 1));
 
   // Retrieve stored 7-day plan from activeExperiment or generate fallback
   const dailyPlanArray = (exp.dailyPlan && exp.dailyPlan.length === 7)
     ? exp.dailyPlan
     : generate7DayPlan(exp.targetMetric, exp.watchedMetrics, exp.baseline);
 
-  const currentPlanItem = dailyPlanArray[currentDayIndex] || {
-    day: currentDayNumber,
+  const currentPlanItem = dailyPlanArray[currentPlanIndex] || {
+    day: calendarDayNum,
     action: exp.changeDescription || "Try a daily micro-change.",
     reason: "Testing a daily micro-action helps identify what works best for your body."
   };
@@ -135,12 +136,11 @@ export default function ExperimentPage() {
       ...todayMetrics,
     });
 
-    const dayJustLogged = currentDayNumber;
-    setLogSuccessMsg(`✓ Day ${dayJustLogged} complete! Tomorrow you'll try a different small change.`);
+    const statusLabel = todayCompleted ? 'complete' : 'skipped (not logged)';
+    setLogSuccessMsg(`✓ Day ${calendarDayNum} ${statusLabel}! Progress saved for today.`);
     setTimeout(() => setLogSuccessMsg(''), 4000);
 
-    // Check if this log completes the experiment
-    if (expProgress.trackedDays + 1 >= expProgress.totalDays) {
+    if (expProgress.elapsedCalendarDays >= 7) {
       try {
         confetti({
           particleCount: 60,
@@ -170,6 +170,13 @@ export default function ExperimentPage() {
         // ignore
       }
     }
+  };
+
+  const handleCompleteWeekAndStartNext = () => {
+    if (completeCurrentWeekAndStartNext) {
+      completeCurrentWeekAndStartNext();
+    }
+    navigate('/dashboard');
   };
 
   const displayName = (user && user.name && user.name.trim()) ? user.name.trim() : '';
@@ -220,7 +227,7 @@ export default function ExperimentPage() {
               ) : (
                 <span className="exp-page-status-badge active">
                   <Clock size={16} />
-                  <span>ACTIVE EXPERIMENT (Day {currentDayNumber} of {expProgress.totalDays})</span>
+                  <span>ACTIVE EXPERIMENT (Day {calendarDayNum} of {expProgress.totalDays})</span>
                 </span>
               )}
             </div>
@@ -230,7 +237,7 @@ export default function ExperimentPage() {
           <div className="exp-page-progress-box">
             <div className="exp-page-progress-header">
               <span className="exp-page-progress-label">
-                Progress: Day {expProgress.trackedDays} of {expProgress.totalDays}
+                Calendar Progress: Day {expProgress.elapsedCalendarDays} of {expProgress.totalDays} • {expProgress.trackedDays} days logged
               </span>
               <span className="exp-page-progress-pct">
                 {expProgress.percentage}% Complete
@@ -261,7 +268,7 @@ export default function ExperimentPage() {
               <div className="exp-page-today-focal-header">
                 <span className="exp-page-today-tag">
                   <Sparkles size={13} />
-                  <span>DAY {currentDayNumber} OF 7 • TODAY'S SMALL CHANGE</span>
+                  <span>DAY {calendarDayNum} OF 7 • TODAY'S SMALL CHANGE</span>
                 </span>
                 <span style={{ fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
                   Guided Micro-Action
@@ -290,23 +297,41 @@ export default function ExperimentPage() {
           <div className="exp-page-plan-tracker">
             <div className="exp-page-plan-tracker-header">
               <span>7-DAY GUIDED EXPERIMENT PLAN</span>
-              <span>{expProgress.trackedDays}/7 Days Completed</span>
+              <span>{expProgress.trackedDays} Logged • {expProgress.skippedDays} Skipped</span>
             </div>
             <div className="exp-page-plan-pills-grid">
               {dailyPlanArray.map((item, idx) => {
                 const dayNum = idx + 1;
-                const isDone = idx < expProgress.trackedDays;
-                const isActive = idx === currentDayIndex && !expProgress.isComplete;
+                const statusObj = expProgress.dailyStatusMap?.[dayNum] || {};
+                const st = statusObj.status; // 'logged' | 'skipped' | 'today' | 'upcoming'
                 
+                let pillClass = 'upcoming';
+                let iconChar = '○';
+                let labelText = `Day ${dayNum}`;
+
+                if (st === 'logged') {
+                  pillClass = 'completed';
+                  iconChar = '✓';
+                  labelText = 'Logged';
+                } else if (st === 'skipped') {
+                  pillClass = 'skipped';
+                  iconChar = '✕';
+                  labelText = 'Skipped';
+                } else if (st === 'today') {
+                  pillClass = 'active';
+                  iconChar = '●';
+                  labelText = 'Today';
+                }
+
                 return (
                   <div 
                     key={dayNum} 
-                    className={`plan-day-pill ${isDone ? 'completed' : isActive ? 'active' : 'upcoming'}`}
+                    className={`plan-day-pill ${pillClass}`}
                     title={item.action}
                   >
-                    <span>{isDone ? '✓' : isActive ? '●' : '○'} Day {dayNum}</span>
+                    <span>{iconChar} Day {dayNum}</span>
                     <span style={{ fontSize: '9px', opacity: 0.85, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
-                      {isDone ? 'Done' : isActive ? 'Today' : `Plan`}
+                      {labelText}
                     </span>
                   </div>
                 );
@@ -329,7 +354,7 @@ export default function ExperimentPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <FlaskConical size={16} color="#4f46e5" />
                   <span className="exp-page-detail-label" style={{ color: '#0f172a', fontSize: '12px' }}>
-                    LOG EXPERIMENT CHECK-IN • DAY {currentDayNumber} OF {expProgress.totalDays}
+                    LOG EXPERIMENT CHECK-IN • DAY {calendarDayNum} OF {expProgress.totalDays}
                   </span>
                 </div>
                 <span className="eval-factor-badge watch">
@@ -377,56 +402,58 @@ export default function ExperimentPage() {
                         transition: 'all 0.15s ease'
                       }}
                     >
-                      ✕ Not today
+                      ✕ Not logged today
                     </button>
                   </div>
                 </div>
 
-                {/* Watched Metrics Logging Row */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <span className="exp-page-detail-label" style={{ color: '#475569' }}>
-                    Log Actual Values for Day {currentDayNumber}:
-                  </span>
+                {/* Watched Metrics Logging Row (Only required when todayCompleted === true) */}
+                {todayCompleted && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span className="exp-page-detail-label" style={{ color: '#475569' }}>
+                      Log Actual Values for Day {calendarDayNum}:
+                    </span>
 
-                  <div className="exp-page-details-grid">
-                    {watchedMetricKeys.map(key => {
-                      const conf = METRIC_CONFIG[key];
-                      const val = todayMetrics[key] ?? conf.defaultVal;
+                    <div className="exp-page-details-grid">
+                      {watchedMetricKeys.map(key => {
+                        const conf = METRIC_CONFIG[key];
+                        const val = todayMetrics[key] ?? conf.defaultVal;
 
-                      return (
-                        <div key={key} className="exp-page-detail-card" style={{ background: '#f8fafc' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justify: 'space-between' }}>
-                            <span className="exp-page-detail-label" style={{ display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'none', fontSize: '12px' }}>
-                              <span>{conf.icon}</span>
-                              <span>{conf.label}</span>
-                            </span>
-                            <span style={{ fontSize: '13px', fontWeight: '800', color: '#4f46e5' }}>
-                              {conf.formatVal(val)}
-                            </span>
+                        return (
+                          <div key={key} className="exp-page-detail-card" style={{ background: '#f8fafc' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justify: 'space-between' }}>
+                              <span className="exp-page-detail-label" style={{ display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'none', fontSize: '12px' }}>
+                                <span>{conf.icon}</span>
+                                <span>{conf.label}</span>
+                              </span>
+                              <span style={{ fontSize: '13px', fontWeight: '800', color: '#4f46e5' }}>
+                                {conf.formatVal(val)}
+                              </span>
+                            </div>
+
+                            <div className="stepper-row" style={{ marginTop: '6px' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleMetricChange(key, Math.max(conf.min, Number((val - conf.step).toFixed(1))))}
+                                className="stepper-btn-action"
+                              >
+                                -
+                              </button>
+                              <span className="stepper-val-label">{val}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleMetricChange(key, Math.min(conf.max, Number((val + conf.step).toFixed(1))))}
+                                className="stepper-btn-action"
+                              >
+                                +
+                              </button>
+                            </div>
                           </div>
-
-                          <div className="stepper-row" style={{ marginTop: '6px' }}>
-                            <button
-                              type="button"
-                              onClick={() => handleMetricChange(key, Math.max(conf.min, Number((val - conf.step).toFixed(1))))}
-                              className="stepper-btn-action"
-                            >
-                              -
-                            </button>
-                            <span className="stepper-val-label">{val}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleMetricChange(key, Math.min(conf.max, Number((val + conf.step).toFixed(1))))}
-                              className="stepper-btn-action"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <button
                   type="button"
@@ -434,7 +461,7 @@ export default function ExperimentPage() {
                   className="btn-coach-start"
                   style={{ width: '100%', justifyContent: 'center', marginTop: '4px' }}
                 >
-                  <span>Log Day {currentDayNumber} Experiment Progress →</span>
+                  <span>{todayCompleted ? `Log Day ${calendarDayNum} Experiment Progress →` : `Mark Day ${calendarDayNum} as Not Logged →`}</span>
                 </button>
               </div>
             </div>
@@ -452,7 +479,7 @@ export default function ExperimentPage() {
               </p>
             </div>
             <span className="exp-page-status-badge active">
-              {expProgress.trackedDays} Days Logged
+              {expProgress.trackedDays} Days Logged • {expProgress.skippedDays} Skipped
             </span>
           </div>
 
@@ -474,7 +501,7 @@ export default function ExperimentPage() {
                       </span>
                     ) : (
                       <span className="exp-page-comp-diff-pill warning">
-                        Pending logs
+                        No logged data
                       </span>
                     )}
                   </div>
@@ -488,7 +515,7 @@ export default function ExperimentPage() {
                     <div className="exp-page-comp-val-col after">
                       <span className="exp-page-comp-val-label" style={{ color: '#4f46e5' }}>AFTER EXPERIMENT</span>
                       <span className="exp-page-comp-val-num after">
-                        {c.hasData ? c.formatVal(c.afterVal) : 'Not logged yet'}
+                        {c.hasData ? c.formatVal(c.afterVal) : 'Not logged'}
                       </span>
                     </div>
                   </div>
@@ -517,7 +544,7 @@ export default function ExperimentPage() {
               <p className="exp-page-decision-sub">
                 {expProgress.isComplete 
                   ? 'Your 7-day experiment is complete! Decide whether to adopt or drop this habit.'
-                  : `Log your remaining ${expProgress.totalDays - expProgress.trackedDays} day(s) above to complete the experiment and unlock your final decision.`}
+                  : `Log your remaining days above to complete the experiment and unlock your final decision.`}
               </p>
             </div>
 
@@ -542,20 +569,32 @@ export default function ExperimentPage() {
                     : "That's okay! Discarding changes that don't suit you is an essential part of the HabitLoop process."}
                 </p>
 
-                <div className="exp-page-result-btn-group">
-                  <button 
-                    onClick={() => navigate('/dashboard')}
-                    className="btn-coach-back"
-                  >
-                    Return to Dashboard
-                  </button>
-                  <button 
-                    onClick={() => navigate('/recommendations')}
+                <div className="exp-page-result-btn-group" style={{ flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <button 
+                      onClick={() => navigate('/dashboard')}
+                      className="btn-coach-back"
+                      style={{ flex: 1 }}
+                    >
+                      Return to Dashboard
+                    </button>
+                    <button 
+                      onClick={() => navigate('/recommendations')}
+                      className="btn-eval-cta"
+                      style={{ flex: 1, background: '#1e1b4b', color: '#ffffff' }}
+                    >
+                      <span>Try Another Change</span>
+                      <ArrowRight size={16} />
+                    </button>
+                  </div>
+                  
+                  {/* AUTOMATIC NEXT-WEEK HABITLOOP CYCLE TRANSITION BUTTON */}
+                  <button
+                    onClick={handleCompleteWeekAndStartNext}
                     className="btn-eval-cta"
-                    style={{ background: '#1e1b4b', color: '#ffffff' }}
+                    style={{ width: '100%', justifyContent: 'center', background: '#4f46e5', color: '#ffffff', padding: '14px 20px', borderRadius: '14px', fontWeight: '800' }}
                   >
-                    <span>Try Another Change</span>
-                    <ArrowRight size={16} />
+                    <span>Complete Week & Begin Next Loop →</span>
                   </button>
                 </div>
               </div>
@@ -573,7 +612,7 @@ export default function ExperimentPage() {
                     <span>✓ Keep This Change</span>
                   </div>
                   <span className="exp-decision-btn-sub">
-                    {expProgress.isComplete ? 'Lock in this habit for future loops' : `Complete all ${expProgress.totalDays} days to unlock`}
+                    {expProgress.isComplete ? 'Lock in this habit for future loops' : `Complete all ${expProgress.totalDays} calendar days to unlock`}
                   </span>
                 </button>
 

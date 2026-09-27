@@ -15,16 +15,20 @@ import {
 import confetti from 'canvas-confetti';
 import { useUser, OPTION_NUMERIC_MAP } from '../context/UserContext';
 
-// 1. ACTIVE WEEK DAYS DEFINITION (Mon 22 → Sun 28)
-const WEEK_DAYS = [
-  { dayStr: 'MON', fullDay: 'Monday', dateNum: 22, dateStr: '2026-09-22', isToday: false },
-  { dayStr: 'TUE', fullDay: 'Tuesday', dateNum: 23, dateStr: '2026-09-23', isToday: false },
-  { dayStr: 'WED', fullDay: 'Wednesday', dateNum: 24, dateStr: '2026-09-24', isToday: true },
-  { dayStr: 'THU', fullDay: 'Thursday', dateNum: 25, dateStr: '2026-09-25', isToday: false },
-  { dayStr: 'FRI', fullDay: 'Friday', dateNum: 26, dateStr: '2026-09-26', isToday: false },
-  { dayStr: 'SAT', fullDay: 'Saturday', dateNum: 27, dateStr: '2026-09-27', isToday: false },
-  { dayStr: 'SUN', fullDay: 'Sunday', dateNum: 28, dateStr: '2026-09-28', isToday: false },
+import { getWeekDaysList, getTodayDateStr, get7CalendarDays, formatDisplayDate } from '../utils/dateUtils';
+
+// 1. DEFAULT FALLBACK WEEK DATES DEFINITION (Week 1: Sep 21 - Sep 27, 2026)
+export const WEEK_DATES = [
+  '2026-09-21',
+  '2026-09-22',
+  '2026-09-23',
+  '2026-09-24',
+  '2026-09-25',
+  '2026-09-26',
+  '2026-09-27',
 ];
+
+export const WEEK_DAYS = getWeekDaysList(WEEK_DATES);
 
 // 2. PROVISIONAL WEIGHTED WELLNESS FACTORS CONFIGURATION
 export const WELLNESS_FACTORS = [
@@ -161,15 +165,23 @@ export function calculateDailyWellnessScore(log) {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { user, weeklyLogs, setWeeklyLogs, activeExperiment, calculateExperimentProgress, weeklyContext } = useUser();
+  const { user, currentWeek, weeklyLogs, setWeeklyLogs, activeExperiment, calculateExperimentProgress, weeklyContext } = useUser();
   const expProgress = calculateExperimentProgress ? calculateExperimentProgress(activeExperiment) : { trackedDays: 0, totalDays: 7, percentage: 0, isComplete: false };
 
-  // Active selected date state (defaults to Wednesday Sep 24 - Today)
-  const [selectedDateStr, setSelectedDateStr] = useState('2026-09-24');
+  // Calculate dynamic 7 calendar days for current week
+  const weekStartStr = currentWeek?.weekStart || '2026-09-21';
+  const weekDatesList = get7CalendarDays(weekStartStr);
+  const weekDaysList = getWeekDaysList(weekDatesList);
+
+  // Active selected date state (defaults to today's date if within active week, or the first date of current week)
+  const [selectedDateStr, setSelectedDateStr] = useState(() => {
+    const today = getTodayDateStr();
+    return weekDatesList.includes(today) ? today : weekDatesList[0];
+  });
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
 
   // Active day object & active log
-  const activeDayObj = WEEK_DAYS.find(d => d.dateStr === selectedDateStr) || WEEK_DAYS[2];
+  const activeDayObj = weekDaysList.find(d => d.dateStr === selectedDateStr) || weekDaysList[0];
   const activeDayLog = weeklyLogs[selectedDateStr] || {
     saved: false,
     partiallyTracked: false,
@@ -257,7 +269,7 @@ export default function DashboardPage() {
       <div className="dashboard-header-clean">
         <div className="dashboard-eyebrow-tag">
           <Sparkles size={12} className="eyebrow-icon" />
-          <span>DAILY WELLNESS CHECK-IN</span>
+          <span>WEEK {currentWeek?.weekNumber || 1} • DAILY WELLNESS CHECK-IN</span>
         </div>
         <h1 className="dashboard-main-greeting">
           Good morning, {displayName}!
@@ -287,7 +299,7 @@ export default function DashboardPage() {
           {/* Center Column */}
           <div className="exp-col-center">
             <span className="exp-day-text">
-              {expProgress.isComplete ? `${expProgress.trackedDays} of ${expProgress.totalDays} days measured` : `Day ${expProgress.trackedDays} of ${expProgress.totalDays}`}
+              {expProgress.isComplete ? `${expProgress.trackedDays} of ${expProgress.totalDays} days logged` : `Day ${expProgress.elapsedCalendarDays} of ${expProgress.totalDays} • ${expProgress.trackedDays} logged`}
             </span>
             <div className="exp-progress-track">
               <div 
@@ -340,14 +352,14 @@ export default function DashboardPage() {
         {/* RIGHT CARD: YOUR WEEK */}
         <div className="snapshot-card snapshot-right">
           <div className="snapshot-right-header">
-            <span className="snapshot-tag-label">YOUR WEEK</span>
+            <span className="snapshot-tag-label">YOUR WEEK ({currentWeek?.weekStart} to {currentWeek?.weekEnd})</span>
             <span className="snapshot-tracked-count">
               {completedDaysCount} of 7 days tracked
             </span>
           </div>
 
           <div className="week-days-pills-row">
-            {WEEK_DAYS.map((day) => {
+            {weekDaysList.map((day) => {
               const dayLog = weeklyLogs[day.dateStr];
               const isSelected = selectedDateStr === day.dateStr;
               const isCompleted = dayLog && dayLog.saved;
