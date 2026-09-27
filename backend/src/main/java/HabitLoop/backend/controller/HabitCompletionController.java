@@ -4,6 +4,8 @@ import HabitLoop.backend.entity.Habit;
 import HabitLoop.backend.entity.HabitCompletion;
 import HabitLoop.backend.repository.HabitCompletionRepository;
 import HabitLoop.backend.repository.HabitRepository;
+import HabitLoop.backend.entity.HabitLog;
+import HabitLoop.backend.repository.HabitLogRepository;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,10 +27,14 @@ public class HabitCompletionController {
 
     private final HabitRepository habitRepository;
     private final HabitCompletionRepository habitCompletionRepository;
+    private final HabitLogRepository habitLogRepository;
 
-    public HabitCompletionController(HabitRepository habitRepository, HabitCompletionRepository habitCompletionRepository) {
+    public HabitCompletionController(HabitRepository habitRepository,
+                                   HabitCompletionRepository habitCompletionRepository,
+                                   HabitLogRepository habitLogRepository) {
         this.habitRepository = habitRepository;
         this.habitCompletionRepository = habitCompletionRepository;
+        this.habitLogRepository = habitLogRepository;
     }
 
     // 1. POST /api/completions/{habitId} -> Mark the habit as completed today
@@ -44,8 +50,16 @@ public class HabitCompletionController {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("Habit already completed for today (" + today + ")");
         }
 
-        HabitCompletion completion = new HabitCompletion(habitOptional.get(), today);
+        Habit habit = habitOptional.get();
+        HabitCompletion completion = new HabitCompletion(habit, today);
         HabitCompletion savedCompletion = habitCompletionRepository.save(completion);
+
+        // Sync with canonical habit_logs
+        HabitLog log = habitLogRepository.findByHabitIdAndLogDate(habitId, today)
+                .orElseGet(() -> new HabitLog(habit, habit.getUser(), today, true, habit.getTargetValue(), "Completed"));
+        log.setCompleted(true);
+        habitLogRepository.save(log);
+
         return new ResponseEntity<>(savedCompletion, HttpStatus.CREATED);
     }
 

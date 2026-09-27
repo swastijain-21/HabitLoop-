@@ -12,9 +12,19 @@ import java.util.Optional;
 
 @Repository
 public interface MoodLogRepository extends JpaRepository<MoodLog, Long> {
-    Optional<MoodLog> findByUserIdAndLogDate(Long userId, LocalDate logDate);
 
-    List<MoodLog> findByUserIdAndLogDateBetweenOrderByLogDateAsc(Long userId, LocalDate startDate, LocalDate endDate);
+    @Query("SELECT m FROM MoodLog m WHERE m.user.id = :userId AND m.logDate = :logDate")
+    Optional<MoodLog> findByUserIdAndLogDate(@Param("userId") Long userId, @Param("logDate") LocalDate logDate);
+
+    @Query("SELECT m FROM MoodLog m WHERE m.user.id = :userId")
+    List<MoodLog> findByUserId(@Param("userId") Long userId);
+
+    @Query("SELECT m FROM MoodLog m WHERE m.user.id = :userId AND m.logDate BETWEEN :startDate AND :endDate ORDER BY m.logDate ASC")
+    List<MoodLog> findByUserIdAndLogDateBetweenOrderByLogDateAsc(
+            @Param("userId") Long userId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
 
     @Query("SELECT AVG(m.score) FROM MoodLog m WHERE m.user.id = :userId AND m.logDate BETWEEN :startDate AND :endDate")
     Double findAverageScoreByUserIdAndDateRange(

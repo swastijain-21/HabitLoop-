@@ -65,7 +65,20 @@ public class ExperimentController {
         experiment.setStartDate(request.getStartDate());
         experiment.setEndDate(request.getEndDate());
         experiment.setStatus(status);
-        experiment.setHypothesis(request.getHypothesis());
+        experiment.setHypothesis(request.getHypothesis() != null ? request.getHypothesis() : request.getDescription());
+        experiment.setTargetMetric(request.getTargetMetric() != null && !request.getTargetMetric().isBlank() ? request.getTargetMetric() : "SLEEP_HOURS");
+
+        LocalDate now = LocalDate.now();
+        LocalDate bStart = request.getBeforeStartDate() != null ? request.getBeforeStartDate() : now.minusDays(7);
+        LocalDate bEnd = request.getBeforeEndDate() != null ? request.getBeforeEndDate() : now.minusDays(1);
+        LocalDate dStart = request.getDuringStartDate() != null ? request.getDuringStartDate() : (request.getStartDate() != null ? request.getStartDate() : now);
+        LocalDate dEnd = request.getDuringEndDate() != null ? request.getDuringEndDate() : (request.getEndDate() != null ? request.getEndDate() : now.plusDays(7));
+
+        experiment.setBeforeStartDate(bStart);
+        experiment.setBeforeEndDate(bEnd);
+        experiment.setDuringStartDate(dStart);
+        experiment.setDuringEndDate(dEnd);
+        experiment.setNotes(request.getNotes() != null ? request.getNotes() : request.getResult());
         experiment.setResult(request.getResult());
 
         Experiment savedExperiment = experimentRepository.save(experiment);
@@ -205,6 +218,12 @@ public class ExperimentController {
         private String status;
         private String hypothesis;
         private String result;
+        private String targetMetric;
+        private LocalDate beforeStartDate;
+        private LocalDate beforeEndDate;
+        private LocalDate duringStartDate;
+        private LocalDate duringEndDate;
+        private String notes;
 
         public ExperimentRequest() {}
 
@@ -231,6 +250,24 @@ public class ExperimentController {
 
         public String getResult() { return result; }
         public void setResult(String result) { this.result = result; }
+
+        public String getTargetMetric() { return targetMetric; }
+        public void setTargetMetric(String targetMetric) { this.targetMetric = targetMetric; }
+
+        public LocalDate getBeforeStartDate() { return beforeStartDate; }
+        public void setBeforeStartDate(LocalDate beforeStartDate) { this.beforeStartDate = beforeStartDate; }
+
+        public LocalDate getBeforeEndDate() { return beforeEndDate; }
+        public void setBeforeEndDate(LocalDate beforeEndDate) { this.beforeEndDate = beforeEndDate; }
+
+        public LocalDate getDuringStartDate() { return duringStartDate; }
+        public void setDuringStartDate(LocalDate duringStartDate) { this.duringStartDate = duringStartDate; }
+
+        public LocalDate getDuringEndDate() { return duringEndDate; }
+        public void setDuringEndDate(LocalDate duringEndDate) { this.duringEndDate = duringEndDate; }
+
+        public String getNotes() { return notes; }
+        public void setNotes(String notes) { this.notes = notes; }
     }
 
     // Static DTO for status update PATCH request

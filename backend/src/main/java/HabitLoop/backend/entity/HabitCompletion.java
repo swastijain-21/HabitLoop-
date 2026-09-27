@@ -21,9 +21,15 @@ public class HabitCompletion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     @ManyToOne
     @JoinColumn(name = "habit_id", nullable = false)
     private Habit habit;
+
+    @com.fasterxml.jackson.annotation.JsonProperty("habitId")
+    public Long getHabitId() {
+        return habit != null ? habit.getId() : null;
+    }
 
     @Column(nullable = false)
     private LocalDate completionDate;
@@ -61,6 +67,7 @@ public class HabitCompletion {
         this.id = id;
     }
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public Habit getHabit() {
         return habit;
     }

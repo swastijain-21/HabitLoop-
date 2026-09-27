@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createExperiment, updateExperimentStatus, fetchUserExperiments, updateUserProfile } from '../api/client';
 
 const UserContext = createContext();
 
@@ -508,8 +509,10 @@ export function createFreshUserState(userInfo = {}) {
   const role = userInfo.role || userInfo.workStyle || 'Student';
   return {
     user: {
+      id: userInfo.id || null,
       name: userInfo.name || (normEmail ? normEmail.split('@')[0] : ''),
       email: normEmail,
+      username: userInfo.username || '',
       isLoggedIn: true,
     },
     onboardingData: {
@@ -559,7 +562,7 @@ export function UserProvider({ children }) {
     return null;
   })();
 
-  const [user, setUser] = useState(initialData?.user || { name: '', email: '', isLoggedIn: false });
+  const [user, setUser] = useState(initialData?.user || { id: null, name: '', email: '', username: '', isLoggedIn: false });
   const [onboardingData, setOnboardingData] = useState(initialData?.onboardingData || {
     role: 'Student',
     workStyle: 'Student',
@@ -610,6 +613,35 @@ export function UserProvider({ children }) {
 
   const [experimentHistory, setExperimentHistory] = useState(initialData?.experimentHistory || []);
 
+  // Fetch experiments from MySQL backend if user has an id
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchUserExperiments(user.id).then(list => {
+      if (Array.isArray(list) && list.length > 0) {
+        const active = list.find(e => e.status === 'ACTIVE') || list[0];
+        if (active) {
+          setActiveExperiment(prev => {
+            if (prev && prev.backendId === active.id) return prev;
+            return {
+              id: `exp_${active.id}`,
+              backendId: active.id,
+              title: active.title,
+              goal: active.description || active.hypothesis || 'Wellness Micro-Experiment',
+              changeDescription: active.description || active.hypothesis || active.notes || 'Daily micro-change',
+              targetMetric: (active.targetMetric || 'SLEEP').toLowerCase(),
+              watchedMetrics: ['sleep', 'energy'],
+              durationDays: 7,
+              status: active.status ? active.status.toLowerCase() : 'active',
+              startDate: active.startDate,
+              dailyPlan: generate7DayPlan((active.targetMetric || 'SLEEP').toLowerCase(), ['sleep', 'energy'], {}),
+              baseline: {},
+            };
+          });
+        }
+      }
+    }).catch(err => console.warn('Could not fetch user experiments:', err.message));
+  }, [user?.id]);
+
   // Login / Signup User helper for multi-account state isolation
   const loginOrSignupUser = (userInfo = {}) => {
     const rawEmail = userInfo.email || user.email || '';
@@ -625,8 +657,10 @@ export function UserProvider({ children }) {
         const parsed = JSON.parse(existingRaw);
         newUserState = {
           user: {
+            id: userInfo.id || (parsed.user && parsed.user.id) || null,
             name: (parsed.user && parsed.user.name && parsed.user.name.trim()) ? parsed.user.name.trim() : (userInfo.name || normEmail.split('@')[0]),
             email: normEmail,
+            username: userInfo.username || (parsed.user && parsed.user.username) || '',
             isLoggedIn: true,
           },
           onboardingData: parsed.onboardingData || {
@@ -700,6 +734,12 @@ export function UserProvider({ children }) {
           console.error('Error persisting updated user name:', e);
         }
       }
+
+      if (prev.id) {
+        updateUserProfile(prev.id, { name: trimmed })
+          .catch(e => console.warn('Could not update user name on server:', e.message));
+      }
+
       return updatedUser;
     });
 
@@ -838,6 +878,21 @@ export function UserProvider({ children }) {
       ...prev,
       [newExpId]: {} // 0 logged days initialized
     }));
+
+    if (user?.id) {
+      createExperiment({
+        userId: user.id,
+        title: experimentConfig.title || 'Wellness Micro-Experiment',
+        description: experimentConfig.changeDescription || '7-day micro-experiment',
+        targetMetric: (targetMetric || 'SLEEP').toUpperCase(),
+        startDate: new Date().toISOString().split('T')[0],
+        status: 'ACTIVE'
+      }).then(backendExp => {
+        if (backendExp?.id) {
+          setActiveExperiment(prev => prev ? { ...prev, backendId: backendExp.id } : prev);
+        }
+      }).catch(err => console.warn('Could not persist experiment to backend:', err.message));
+    }
   };
 
   // Complete experiment with decision
@@ -851,6 +906,11 @@ export function UserProvider({ children }) {
     };
     setActiveExperiment(finishedExp);
     setExperimentHistory(prev => [finishedExp, ...prev]);
+
+    if (activeExperiment?.backendId) {
+      updateExperimentStatus(activeExperiment.backendId, 'COMPLETED')
+        .catch(err => console.warn('Could not complete experiment on backend:', err.message));
+    }
   };
 
   // Helper to calculate 0-100 scores for all 8 primary wellness factors from weekly logs
@@ -1238,8 +1298,10 @@ export function UserProvider({ children }) {
       console.error('Error clearing active user email:', e);
     }
     setUser({
+      id: null,
       name: '',
       email: '',
+      username: '',
       isLoggedIn: false,
     });
     setOnboardingData({

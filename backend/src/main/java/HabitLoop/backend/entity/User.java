@@ -1,6 +1,7 @@
 
 package HabitLoop.backend.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -12,7 +13,7 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 100)
+    @Column(length = 100)
     private String name;
 
     @Column(nullable = false, unique = true, length = 50)
@@ -21,6 +22,7 @@ public class User {
     @Column(nullable = false, unique = true, length = 100)
     private String email;
 
+    @JsonIgnore
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
@@ -39,8 +41,8 @@ public class User {
     public User() {
     }
 
-    // Compatibility with the original constructor.
-    // Do not use this for registration until password hashing is implemented.
+    // Compatibility constructor used by tests/seed helpers.
+    // Registration always goes through AuthService (BCrypt).
     public User(String name, String email, String password) {
         this.name = name;
         this.email = email;
@@ -82,7 +84,13 @@ public class User {
     }
 
     public String getName() {
-        return name;
+        if (name != null && !name.isBlank()) {
+            return name;
+        }
+        if (firstName != null && !firstName.isBlank()) {
+            return lastName != null && !lastName.isBlank() ? (firstName + " " + lastName).trim() : firstName;
+        }
+        return username != null ? username : "";
     }
 
     public void setName(String name) {

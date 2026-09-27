@@ -4004,6 +4004,285 @@
   color: #334155;
 }
 
+/* ===================================================
+   14. DASHBOARD HABITS CHECKLIST & STATS STRIP
+   =================================================== */
+.dashboard-stats-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 840px) {
+  .dashboard-stats-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-stats-strip {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dashboard-stat-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  transition: all 0.2s ease;
+}
+
+.dashboard-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+  border-color: #cbd5e1;
+}
+
+.stat-icon-wrapper {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.stat-icon-streak { background: #fff7ed; border: 1px solid #fed7aa; }
+.stat-icon-trophy { background: #fef9c3; border: 1px solid #fde047; }
+.stat-icon-check { background: #ecfdf5; border: 1px solid #a7f3d0; }
+.stat-icon-rate { background: #eff6ff; border: 1px solid #bfdbfe; }
+
+.stat-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-val-text {
+  font-family: var(--font-heading);
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.stat-label-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+}
+
+/* Habits Card */
+.habits-checklist-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+  margin-bottom: 24px;
+}
+
+.habits-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.habits-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.habits-title-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #10b981;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  padding: 4px 10px;
+  border-radius: 9999px;
+}
+
+.habits-main-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.habits-list-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.habit-item-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 14px 18px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  gap: 16px;
+}
+
+.habit-item-card:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+.habit-item-card.completed {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.habit-left-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+}
+
+.habit-checkbox-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 2px solid #cbd5e1;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: transparent;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.habit-checkbox-btn:hover {
+  border-color: #10b981;
+  background: #ecfdf5;
+}
+
+.habit-checkbox-btn.checked {
+  background: #10b981;
+  border-color: #10b981;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.habit-meta-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.habit-name-text {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.habit-item-card.completed .habit-name-text {
+  text-decoration: line-through;
+  color: #64748b;
+}
+
+.habit-submeta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.habit-cat-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+}
+
+.cat-health { background: #eff6ff; color: #2563eb; }
+.cat-fitness { background: #ecfdf5; color: #059669; }
+.cat-mindfulness { background: #f5f3ff; color: #7c3aed; }
+.cat-sleep { background: #eef2ff; color: #4f46e5; }
+.cat-focus { background: #fff7ed; color: #ea580c; }
+.cat-general { background: #f1f5f9; color: #475569; }
+
+.habit-add-modal {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.habit-add-form-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+@media (max-width: 768px) {
+  .habit-add-form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .habit-add-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.btn-add-habit-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #10b981;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+  transition: all 0.2s ease;
+}
+
+.btn-add-habit-cta:hover {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+
 
 
 

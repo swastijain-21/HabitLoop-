@@ -34,9 +34,7 @@ public class HabitController {
     // 1. GET /api/habits/user/{userId} -> return all habits belonging to a user
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<Habit>> getHabitsByUserId(@PathVariable Long userId) {
-        List<Habit> userHabits = habitRepository.findAll().stream()
-                .filter(habit -> habit.getUser() != null && userId.equals(habit.getUser().getId()))
-                .toList();
+        List<Habit> userHabits = habitRepository.findByUserId(userId);
         return ResponseEntity.ok(userHabits);
     }
 
@@ -66,7 +64,10 @@ public class HabitController {
         Habit habit = new Habit();
         habit.setName(request.getName());
         habit.setDescription(request.getDescription());
-        habit.setFrequency(request.getFrequency());
+        habit.setCategory(request.getCategory() != null ? request.getCategory() : "GENERAL");
+        habit.setFrequency(request.getFrequency() != null ? request.getFrequency() : "DAILY");
+        habit.setTargetValue(request.getTargetValue() != null ? request.getTargetValue() : java.math.BigDecimal.valueOf(1.00));
+        habit.setUnit(request.getUnit() != null ? request.getUnit() : "times");
         habit.setActive(request.getActive() != null ? request.getActive() : true);
         habit.setUser(userOptional.get());
 
@@ -89,8 +90,17 @@ public class HabitController {
         if (request.getDescription() != null) {
             habit.setDescription(request.getDescription());
         }
+        if (request.getCategory() != null) {
+            habit.setCategory(request.getCategory());
+        }
         if (request.getFrequency() != null) {
             habit.setFrequency(request.getFrequency());
+        }
+        if (request.getTargetValue() != null) {
+            habit.setTargetValue(request.getTargetValue());
+        }
+        if (request.getUnit() != null) {
+            habit.setUnit(request.getUnit());
         }
         if (request.getActive() != null) {
             habit.setActive(request.getActive());
@@ -138,8 +148,11 @@ public class HabitController {
     public static class HabitRequest {
         private String name;
         private String description;
-        private String frequency;
-        private Boolean active;
+        private String category = "GENERAL";
+        private String frequency = "DAILY";
+        private java.math.BigDecimal targetValue = java.math.BigDecimal.valueOf(1.00);
+        private String unit = "times";
+        private Boolean active = true;
         private Long userId;
 
         public HabitRequest() {
@@ -169,12 +182,36 @@ public class HabitController {
             this.description = description;
         }
 
+        public String getCategory() {
+            return category;
+        }
+
+        public void setCategory(String category) {
+            this.category = category;
+        }
+
         public String getFrequency() {
             return frequency;
         }
 
         public void setFrequency(String frequency) {
             this.frequency = frequency;
+        }
+
+        public java.math.BigDecimal getTargetValue() {
+            return targetValue;
+        }
+
+        public void setTargetValue(java.math.BigDecimal targetValue) {
+            this.targetValue = targetValue;
+        }
+
+        public String getUnit() {
+            return unit;
+        }
+
+        public void setUnit(String unit) {
+            this.unit = unit;
         }
 
         public Boolean getActive() {

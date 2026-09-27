@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { useAppNavigate as useNavigate } from '../context/PageTransitionContext';
+import { registerUser } from '../api/client';
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -15,24 +16,40 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
     }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
     setError('');
+    setLoading(true);
 
-    // Save user state and proceed to onboarding
-    if (loginOrSignupUser) {
-      loginOrSignupUser({
+    try {
+      const result = await registerUser({
         name: name.trim(),
         email: email.trim(),
+        password,
       });
+      const apiUser = result.user;
+      loginOrSignupUser({
+        id: apiUser.id,
+        name: apiUser.name,
+        email: apiUser.email,
+        username: apiUser.username,
+      });
+      navigate('/onboarding');
+    } catch (err) {
+      setError(err.message || 'Signup failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
-
-    navigate('/onboarding');
   };
 
   return (
@@ -66,6 +83,7 @@ export default function SignupPage() {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Enter your full name"
                 className="form-input"
+                disabled={loading}
               />
             </div>
 
@@ -78,6 +96,7 @@ export default function SignupPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
                 className="form-input"
+                disabled={loading}
               />
             </div>
 
@@ -91,6 +110,8 @@ export default function SignupPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   className="form-input"
+                  disabled={loading}
+                  minLength={6}
                 />
                 <button
                   type="button"
@@ -113,6 +134,8 @@ export default function SignupPage() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirm your password"
                   className="form-input"
+                  disabled={loading}
+                  minLength={6}
                 />
                 <button
                   type="button"
@@ -125,8 +148,8 @@ export default function SignupPage() {
               </div>
             </div>
 
-            <button type="submit" className="btn btn-primary btn-auth-submit">
-              <span>Create My Account</span>
+            <button type="submit" className="btn btn-primary btn-auth-submit" disabled={loading}>
+              <span>{loading ? 'Creating account…' : 'Create My Account'}</span>
               <ArrowRight size={16} />
             </button>
           </form>

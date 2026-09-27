@@ -21,9 +21,15 @@ public class MoodEntry {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    @com.fasterxml.jackson.annotation.JsonProperty("userId")
+    public Long getUserId() {
+        return user != null ? user.getId() : null;
+    }
 
     private Integer moodScore;
 
