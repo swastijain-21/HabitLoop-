@@ -1,6 +1,6 @@
 # Habitloop 🔄
 
-Habitloop is a habit tracking and productivity web application designed to help users build consistency and achieve their daily goals.
+HabitLoop is a student-focused wellness app that helps users track daily habits such as sleep, movement, screen time, study/focus hours, mood, energy, mindfulness, and outdoor activity. It evaluates weekly patterns and provides personalized, practical recommendations to help users build healthier routines—one week at a time.
 
 Built as an MVP for a college hackathon by a team of 3–4 developers.
 
@@ -48,13 +48,7 @@ Habitloop/
 
 ---
 
-## 🚀 Hackathon Quick Tips for the Team
 
-1. **Clear Division of Work:**
-   - 1–2 developers focus on `frontend/` (UI components, pages, API connection).
-   - 1–2 developers focus on `backend/` (Spring Boot endpoints, MySQL connectivity).
-2. **Keep APIs Simple:** Agree early on simple JSON request/response formats for endpoints like `/api/habits` and `/api/habits/{id}/check`.
-3. **No Premature Optimization:** Stick to basic CRUD and MVP features first before adding complex functionality.
 
 #HabitLoop Fitness Tracker
 Habitloop is a personalized wellness and lifestyle companion that turns everyday data into actionable insights. It tracks habits such as sleep, screen time, activity, exercise, mood, and productivity, identifies meaningful patterns, and recommends simple, fun activities to help users improve. 
