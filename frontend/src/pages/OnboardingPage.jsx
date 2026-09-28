@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { ArrowRight, Check, Sparkles, GraduationCap, Briefcase, Laptop, BookOpen, Building, Palette, Clock, Moon, Droplets, Zap, Apple, HeartHandshake, Smartphone, Users } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { useAppNavigate as useNavigate } from '../context/PageTransitionContext';
+import { createHabit } from '../api/client';
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
-  const { setOnboardingData } = useUser();
+  const { user, setOnboardingData } = useUser();
   const [step, setStep] = useState(1);
 
   // Step 1 State: Lifestyle / Work Style Routine Selection
@@ -92,7 +93,7 @@ export default function OnboardingPage() {
     );
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step < 3) {
       setStep(step + 1);
     } else {
@@ -102,6 +103,43 @@ export default function OnboardingPage() {
         focusAreas: selectedAreas,
         goals: selectedGoals,
       });
+
+      // If user is logged in with backend ID, seed initial habits to MySQL database
+      if (user?.id) {
+        const goalHabitMap = {
+          'Improve sleep consistency': { name: '8 Hours Restful Sleep', category: 'SLEEP', targetValue: 8, unit: 'hours' },
+          'Drink more water': { name: 'Hydrate 2 Liters Water', category: 'HEALTH', targetValue: 2, unit: 'liters' },
+          'Move more throughout the day': { name: 'Daily 30-Minute Movement', category: 'FITNESS', targetValue: 30, unit: 'minutes' },
+          'Take regular breaks': { name: 'Screen & Study Breaks', category: 'FOCUS', targetValue: 3, unit: 'breaks' },
+          'Manage stress & fatigue': { name: '10-Min Evening Mindfulness', category: 'MINDFULNESS', targetValue: 10, unit: 'minutes' },
+          'Improve study/work balance': { name: 'Focused Deep Work Block', category: 'PRODUCTIVITY', targetValue: 2, unit: 'hours' },
+          'Spend less time on screens': { name: 'Screen Curfew Before Bed', category: 'GENERAL', targetValue: 1, unit: 'routine' },
+        };
+
+        const defaultHabits = selectedGoals.map(g => goalHabitMap[g]).filter(Boolean);
+        if (defaultHabits.length === 0) {
+          defaultHabits.push(
+            { name: 'Hydrate 2 Liters Water', category: 'HEALTH', targetValue: 2, unit: 'liters' },
+            { name: '8 Hours Restful Sleep', category: 'SLEEP', targetValue: 8, unit: 'hours' }
+          );
+        }
+
+        try {
+          await Promise.all(defaultHabits.map(h => 
+            createHabit({
+              userId: user.id,
+              name: h.name,
+              category: h.category,
+              frequency: 'DAILY',
+              targetValue: h.targetValue,
+              unit: h.unit
+            }).catch(e => console.warn('Could not create habit:', e.message))
+          ));
+        } catch (e) {
+          console.warn('Error saving onboarding habits:', e);
+        }
+      }
+
       navigate('/dashboard');
     }
   };

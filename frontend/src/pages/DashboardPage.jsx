@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppNavigate as useNavigate } from '../context/PageTransitionContext';
 import { 
@@ -14,19 +14,37 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useUser, OPTION_NUMERIC_MAP } from '../context/UserContext';
+import { 
+  upsertDailyWellness, 
+  fetchWellnessRange,
+  fetchUserHabits,
+  createHabit,
+  completeHabitToday,
+  fetchDashboard
+} from '../api/client';
+import { weeklyLogToWellnessPayload, wellnessResponseToWeeklyLog } from '../api/wellnessMapper';
 
 import { getWeekDaysList, getTodayDateStr, get7CalendarDays, formatDisplayDate } from '../utils/dateUtils';
 
 // 1. DEFAULT FALLBACK WEEK DATES DEFINITION (Week 1: Sep 21 - Sep 27, 2026)
-export const WEEK_DATES = [
-  '2026-09-21',
-  '2026-09-22',
-  '2026-09-23',
-  '2026-09-24',
-  '2026-09-25',
-  '2026-09-26',
-  '2026-09-27',
-];
+const getCurrentWeekDates = () => {
+  const today = new Date();
+  const day = today.getDay(); // Sunday = 0, Monday = 1, etc.
+
+  // Calculate Monday of the current week
+  const monday = new Date(today);
+  const diff = day === 0 ? -6 : 1 - day;
+  monday.setDate(today.getDate() + diff);
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+
+    return date.toISOString().split('T')[0];
+  });
+};
+
+export const WEEK_DATES = getCurrentWeekDates();
 
 export const WEEK_DAYS = getWeekDaysList(WEEK_DATES);
 
@@ -179,6 +197,136 @@ export default function DashboardPage() {
     return weekDatesList.includes(today) ? today : weekDatesList[0];
   });
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
+  const [saveErrorMsg, setSaveErrorMsg] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [loadingRemote, setLoadingRemote] = useState(false);
+
+  // Habits & Backend Stats State
+  const [habits, setHabits] = useState([]);
+  const [completedHabitIds, setCompletedHabitIds] = useState(new Set());
+  const [dashboardStats, setDashboardStats] = useState(null);
+  const [loadingHabits, setLoadingHabits] = useState(false);
+  const [showAddHabit, setShowAddHabit] = useState(false);
+  const [newHabitName, setNewHabitName] = useState('');
+  const [newHabitCategory, setNewHabitCategory] = useState('HEALTH');
+  const [newHabitTarget, setNewHabitTarget] = useState('1');
+  const [newHabitUnit, setNewHabitUnit] = useState('times');
+  const [addingHabit, setAddingHabit] = useState(false);
+
+  // Load habits and live dashboard stats from Spring Boot
+  const loadHabitsAndStats = async () => {
+    if (!user?.id) return;
+    setLoadingHabits(true);
+    try {
+      const [fetchedHabits, stats] = await Promise.all([
+        fetchUserHabits(user.id).catch(() => []),
+        fetchDashboard(user.id).catch(() => null)
+      ]);
+      setHabits(Array.isArray(fetchedHabits) ? fetchedHabits : []);
+      if (stats) setDashboardStats(stats);
+    } catch (e) {
+      console.warn('Error loading habits/dashboard stats:', e);
+    } finally {
+      setLoadingHabits(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.id) {
+      loadHabitsAndStats();
+    }
+  }, [user?.id]);
+
+  const handleToggleHabit = async (habit) => {
+    const habitId = habit.id;
+    if (completedHabitIds.has(habitId)) return;
+
+    setCompletedHabitIds(prev => new Set([...prev, habitId]));
+    confetti({
+      particleCount: 30,
+      spread: 55,
+      origin: { y: 0.6 }
+    });
+
+    try {
+      await completeHabitToday(habitId);
+      if (user?.id) {
+        const stats = await fetchDashboard(user.id);
+        if (stats) setDashboardStats(stats);
+      }
+    } catch (err) {
+      console.warn('Could not sync completion to backend:', err.message);
+    }
+  };
+
+  const handleCreateHabit = async (e) => {
+    e.preventDefault();
+    if (!newHabitName.trim()) return;
+    setAddingHabit(true);
+    try {
+      const created = await createHabit({
+        userId: user?.id || 1,
+        name: newHabitName.trim(),
+        category: newHabitCategory,
+        frequency: 'DAILY',
+        targetValue: parseFloat(newHabitTarget) || 1,
+        unit: newHabitUnit.trim() || 'times'
+      });
+      setHabits(prev => [...prev, created]);
+      setNewHabitName('');
+      setShowAddHabit(false);
+      if (user?.id) {
+        const stats = await fetchDashboard(user.id);
+        if (stats) setDashboardStats(stats);
+      }
+    } catch (err) {
+      console.error('Error creating habit:', err);
+    } finally {
+      setAddingHabit(false);
+    }
+  };
+
+  const getCategoryIcon = (category) => {
+    const cat = (category || '').toUpperCase();
+    if (cat.includes('HEALTH') || cat.includes('HYDRATION')) return '💧';
+    if (cat.includes('FITNESS') || cat.includes('MOVEMENT') || cat.includes('WORKOUT')) return '🏃';
+    if (cat.includes('MINDFULNESS') || cat.includes('MEDITATION')) return '🧠';
+    if (cat.includes('SLEEP')) return '🌙';
+    if (cat.includes('FOCUS') || cat.includes('STUDY') || cat.includes('WORK')) return '📚';
+    if (cat.includes('SCREEN') || cat.includes('DETOX')) return '📱';
+    return '⭐';
+  };
+
+  // Load persisted wellness days from MySQL when a logged-in user has a backend id
+  useEffect(() => {
+    if (!user?.isLoggedIn || !user?.id) return;
+
+    let cancelled = false;
+    const load = async () => {
+      setLoadingRemote(true);
+      try {
+        const days = await fetchWellnessRange(user.id, '2026-09-22', '2026-09-28');
+        if (cancelled || !Array.isArray(days) || days.length === 0) return;
+
+        setWeeklyLogs((prev) => {
+          const next = { ...prev };
+          days.forEach((day) => {
+            const mapped = wellnessResponseToWeeklyLog(day);
+            if (mapped && day.date) {
+              next[day.date] = { ...(next[day.date] || {}), ...mapped };
+            }
+          });
+          return next;
+        });
+      } catch (err) {
+        console.warn('Could not load wellness from server:', err.message);
+      } finally {
+        if (!cancelled) setLoadingRemote(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user?.id, user?.isLoggedIn, setWeeklyLogs]);
 
   // Active day object & active log
   const activeDayObj = weekDaysList.find(d => d.dateStr === selectedDateStr) || weekDaysList[0];
@@ -229,26 +377,38 @@ export default function DashboardPage() {
     });
   };
 
-  const handleSaveCurrentDay = () => {
-    setWeeklyLogs(prev => {
-      const current = prev[selectedDateStr] || {};
-      return {
-        ...prev,
-        [selectedDateStr]: {
-          ...current,
-          saved: true,
-          partiallyTracked: true,
-          sleep: current.sleep ?? 7.5,
-          movement: current.movement ?? '30m',
-          screenTime: current.screenTime ?? '2–4h',
-          focus: current.focus ?? '2–4h',
-          energy: current.energy ?? 4,
-          mood: current.mood ?? 4,
-          mindfulness: current.mindfulness ?? '10m',
-          outdoor: current.outdoor ?? '30m',
-        }
-      };
-    });
+  const handleSaveCurrentDay = async () => {
+    setSaveErrorMsg('');
+    setSaving(true);
+
+    const draft = {
+      ...(weeklyLogs[selectedDateStr] || {}),
+      saved: true,
+      partiallyTracked: true,
+      sleep: weeklyLogs[selectedDateStr]?.sleep ?? 7.5,
+      movement: weeklyLogs[selectedDateStr]?.movement ?? '30m',
+      screenTime: weeklyLogs[selectedDateStr]?.screenTime ?? '2–4h',
+      focus: weeklyLogs[selectedDateStr]?.focus ?? '2–4h',
+      energy: weeklyLogs[selectedDateStr]?.energy ?? 4,
+      mood: weeklyLogs[selectedDateStr]?.mood ?? 4,
+      mindfulness: weeklyLogs[selectedDateStr]?.mindfulness ?? '10m',
+      outdoor: weeklyLogs[selectedDateStr]?.outdoor ?? '30m',
+    };
+
+    setWeeklyLogs(prev => ({
+      ...prev,
+      [selectedDateStr]: draft,
+    }));
+
+    if (user?.id) {
+      try {
+        await upsertDailyWellness(weeklyLogToWellnessPayload(user.id, selectedDateStr, draft));
+      } catch (err) {
+        setSaveErrorMsg(err.message || 'Saved locally, but could not reach the server.');
+        setSaving(false);
+        return;
+      }
+    }
 
     confetti({
       particleCount: 30,
@@ -256,8 +416,13 @@ export default function DashboardPage() {
       origin: { y: 0.75 }
     });
 
-    setSaveSuccessMsg(`✓ ${activeDayObj.fullDay} wellness logged & saved!`);
+    setSaveSuccessMsg(
+      user?.id
+        ? `✓ ${activeDayObj.fullDay} saved to HabitLoop!`
+        : `✓ ${activeDayObj.fullDay} wellness logged locally (log in to sync).`
+    );
     setTimeout(() => setSaveSuccessMsg(''), 3500);
+    setSaving(false);
   };
 
   const displayName = (user.name && user.name.trim()) ? user.name.trim() : 'there';
@@ -397,6 +562,202 @@ export default function DashboardPage() {
 
       </div>
 
+      {/* 3.5 LIVE BACKEND STATS STRIP */}
+      <div className="dashboard-stats-strip">
+        <div className="dashboard-stat-card">
+          <div className="stat-icon-wrapper stat-icon-streak">🔥</div>
+          <div className="stat-content">
+            <span className="stat-val-text">{dashboardStats?.currentStreak ?? 1} Days</span>
+            <span className="stat-label-text">Current Streak</span>
+          </div>
+        </div>
+
+        <div className="dashboard-stat-card">
+          <div className="stat-icon-wrapper stat-icon-trophy">🏆</div>
+          <div className="stat-content">
+            <span className="stat-val-text">{dashboardStats?.longestStreak ?? 1} Days</span>
+            <span className="stat-label-text">Longest Streak</span>
+          </div>
+        </div>
+
+        <div className="dashboard-stat-card">
+          <div className="stat-icon-wrapper stat-icon-check">⚡</div>
+          <div className="stat-content">
+            <span className="stat-val-text">
+              {dashboardStats ? `${dashboardStats.completedToday || completedHabitIds.size} / ${dashboardStats.activeHabits || habits.length}` : `${completedHabitIds.size} / ${habits.length}`}
+            </span>
+            <span className="stat-label-text">Habits Completed Today</span>
+          </div>
+        </div>
+
+        <div className="dashboard-stat-card">
+          <div className="stat-icon-wrapper stat-icon-rate">📈</div>
+          <div className="stat-content">
+            <span className="stat-val-text">
+              {dashboardStats?.habitCompletionRate ? `${Math.round(dashboardStats.habitCompletionRate)}%` : '100%'}
+            </span>
+            <span className="stat-label-text">Weekly Consistency</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 3.6 TODAY'S HABIT LOOP CHECKLIST */}
+      <div className="habits-checklist-card">
+        <div className="habits-card-header">
+          <div className="habits-header-left">
+            <span className="habits-title-tag">
+              <Sparkles size={12} /> HABIT LOOP
+            </span>
+            <h2 className="habits-main-title">My Daily Habits</h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowAddHabit(!showAddHabit)}
+            className="btn-add-habit-cta"
+          >
+            <Plus size={16} />
+            <span>{showAddHabit ? 'Cancel' : '+ Add Habit'}</span>
+          </button>
+        </div>
+
+        {/* Add Habit Inline Form */}
+        {showAddHabit && (
+          <form onSubmit={handleCreateHabit} className="habit-add-modal">
+            <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '8px', color: '#0f172a' }}>
+              Create New Daily Habit
+            </div>
+            <div className="habit-add-form-grid">
+              <input
+                type="text"
+                required
+                placeholder="Habit Name (e.g. 10m Meditation)"
+                value={newHabitName}
+                onChange={(e) => setNewHabitName(e.target.value)}
+                className="form-input"
+              />
+              <select
+                value={newHabitCategory}
+                onChange={(e) => setNewHabitCategory(e.target.value)}
+                className="form-input"
+              >
+                <option value="HEALTH">Health & Hydration</option>
+                <option value="FITNESS">Fitness & Movement</option>
+                <option value="MINDFULNESS">Mindfulness</option>
+                <option value="SLEEP">Sleep Hygiene</option>
+                <option value="FOCUS">Deep Focus / Study</option>
+                <option value="GENERAL">General</option>
+              </select>
+              <input
+                type="number"
+                min="0.1"
+                step="any"
+                placeholder="Target"
+                value={newHabitTarget}
+                onChange={(e) => setNewHabitTarget(e.target.value)}
+                className="form-input"
+              />
+              <input
+                type="text"
+                placeholder="Unit (e.g. mins, liters)"
+                value={newHabitUnit}
+                onChange={(e) => setNewHabitUnit(e.target.value)}
+                className="form-input"
+              />
+            </div>
+            <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setShowAddHabit(false)}
+                className="btn-edit-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={addingHabit}
+                className="btn-add-habit-cta"
+              >
+                <span>{addingHabit ? 'Saving…' : 'Save Habit'}</span>
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Habit List */}
+        {loadingHabits ? (
+          <p className="save-hint-text">Loading your habits from HabitLoop…</p>
+        ) : habits.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '24px 16px', color: '#64748b' }}>
+            <p style={{ marginBottom: '8px' }}>No active habits added yet.</p>
+            <button
+              type="button"
+              onClick={() => setShowAddHabit(true)}
+              className="btn-add-habit-cta"
+              style={{ margin: '0 auto' }}
+            >
+              <Plus size={16} /> Add Your First Habit
+            </button>
+          </div>
+        ) : (
+          <div className="habits-list-grid">
+            {habits.map((habit) => {
+              const isChecked = completedHabitIds.has(habit.id);
+              const catClass = `cat-${(habit.category || 'general').toLowerCase()}`;
+              return (
+                <div
+                  key={habit.id}
+                  className={`habit-item-card ${isChecked ? 'completed' : ''}`}
+                >
+                  <div className="habit-left-group">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleHabit(habit)}
+                      className={`habit-checkbox-btn ${isChecked ? 'checked' : ''}`}
+                      title={isChecked ? 'Already completed today' : 'Click to complete for today'}
+                    >
+                      {isChecked ? '✓' : ''}
+                    </button>
+
+                    <div className="habit-meta-col">
+                      <span className="habit-name-text">
+                        {getCategoryIcon(habit.category)} {habit.name}
+                      </span>
+                      <div className="habit-submeta-row">
+                        <span className={`habit-cat-pill ${catClass}`}>
+                          {habit.category || 'HABIT'}
+                        </span>
+                        <span>•</span>
+                        <span>
+                          Target: {habit.targetValue} {habit.unit} ({habit.frequency || 'Daily'})
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    {isChecked ? (
+                      <span style={{ fontSize: '12px', fontWeight: '700', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        ✓ Completed Today!
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleToggleHabit(habit)}
+                        className="btn-edit-save"
+                        style={{ fontSize: '12px', padding: '6px 12px' }}
+                      >
+                        Check Off
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* 4. MAIN DAILY CHECK-IN SECTION (8 Factor 2-Col Grid) */}
       <div className="checkin-main-card">
         <div className="checkin-card-header">
@@ -428,6 +789,16 @@ export default function DashboardPage() {
             <span>{saveSuccessMsg}</span>
           </div>
         )}
+        {saveErrorMsg && (
+          <div className="auth-error-alert" style={{ marginBottom: '1rem' }}>
+            {saveErrorMsg}
+          </div>
+        )}
+        {loadingRemote && (
+          <p className="save-hint-text" style={{ marginBottom: '0.75rem' }}>
+            Loading your saved wellness from the server…
+          </p>
+        )}
 
         <div className="factor-cards-grid">
           {WELLNESS_FACTORS.map((factor) => {
@@ -455,8 +826,9 @@ export default function DashboardPage() {
             type="button"
             onClick={handleSaveCurrentDay}
             className="btn-save-primary"
+            disabled={saving}
           >
-            <span>Save Today's Progress →</span>
+            <span>{saving ? 'Saving…' : "Save Today's Progress →"}</span>
           </button>
         </div>
       </div>

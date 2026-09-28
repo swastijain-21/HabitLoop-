@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { getTodayDateStr, getCalendarDaysDiff, addCalendarDays, get7CalendarDays } from '../utils/dateUtils';
+import { createExperiment, updateExperimentStatus, fetchUserExperiments, updateUserProfile } from '../api/client';
 
 const UserContext = createContext();
 
@@ -522,8 +523,10 @@ export function createFreshUserState(userInfo = {}) {
   const role = userInfo.role || userInfo.workStyle || 'Student';
   return {
     user: {
+      id: userInfo.id || null,
       name: userInfo.name || (normEmail ? normEmail.split('@')[0] : ''),
       email: normEmail,
+      username: userInfo.username || '',
       isLoggedIn: true,
     },
     onboardingData: {
@@ -579,7 +582,7 @@ export function UserProvider({ children }) {
     return null;
   })();
 
-  const [user, setUser] = useState(initialData?.user || { name: '', email: '', isLoggedIn: false });
+  const [user, setUser] = useState(initialData?.user || { id: null, name: '', email: '', username: '', isLoggedIn: false });
   const [onboardingData, setOnboardingData] = useState(initialData?.onboardingData || {
     role: 'Student',
     workStyle: 'Student',
@@ -588,11 +591,26 @@ export function UserProvider({ children }) {
   });
 
   // Current active week tracking definition
-  const [currentWeek, setCurrentWeek] = useState(initialData?.currentWeek || {
+  const getCurrentWeek = () => {
+  const today = new Date();
+  const day = today.getDay();
+
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + (day === 0 ? -6 : 1 - day));
+
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+
+  const formatDate = (date) => date.toISOString().split('T')[0];
+
+  return {
     weekNumber: 1,
-    weekStart: '2026-09-21',
-    weekEnd: '2026-09-27',
-  });
+    weekStart: formatDate(monday),
+    weekEnd: formatDate(sunday),
+  };
+};
+
+const [currentWeek, setCurrentWeek] = useState(getCurrentWeek());
 
   // Historical completed weeks archive
   const [pastWeeks, setPastWeeks] = useState(initialData?.pastWeeks || []);
@@ -640,6 +658,35 @@ export function UserProvider({ children }) {
 
   const [experimentHistory, setExperimentHistory] = useState(initialData?.experimentHistory || []);
 
+  // Fetch experiments from MySQL backend if user has an id
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchUserExperiments(user.id).then(list => {
+      if (Array.isArray(list) && list.length > 0) {
+        const active = list.find(e => e.status === 'ACTIVE') || list[0];
+        if (active) {
+          setActiveExperiment(prev => {
+            if (prev && prev.backendId === active.id) return prev;
+            return {
+              id: `exp_${active.id}`,
+              backendId: active.id,
+              title: active.title,
+              goal: active.description || active.hypothesis || 'Wellness Micro-Experiment',
+              changeDescription: active.description || active.hypothesis || active.notes || 'Daily micro-change',
+              targetMetric: (active.targetMetric || 'SLEEP').toLowerCase(),
+              watchedMetrics: ['sleep', 'energy'],
+              durationDays: 7,
+              status: active.status ? active.status.toLowerCase() : 'active',
+              startDate: active.startDate,
+              dailyPlan: generate7DayPlan((active.targetMetric || 'SLEEP').toLowerCase(), ['sleep', 'energy'], {}),
+              baseline: {},
+            };
+          });
+        }
+      }
+    }).catch(err => console.warn('Could not fetch user experiments:', err.message));
+  }, [user?.id]);
+
   // Login / Signup User helper for multi-account state isolation
   const loginOrSignupUser = (userInfo = {}) => {
     const rawEmail = userInfo.email || user.email || '';
@@ -655,8 +702,10 @@ export function UserProvider({ children }) {
         const parsed = JSON.parse(existingRaw);
         newUserState = {
           user: {
+            id: userInfo.id || (parsed.user && parsed.user.id) || null,
             name: (parsed.user && parsed.user.name && parsed.user.name.trim()) ? parsed.user.name.trim() : (userInfo.name || normEmail.split('@')[0]),
             email: normEmail,
+            username: userInfo.username || (parsed.user && parsed.user.username) || '',
             isLoggedIn: true,
           },
           onboardingData: parsed.onboardingData || {
@@ -736,6 +785,12 @@ export function UserProvider({ children }) {
           console.error('Error persisting updated user name:', e);
         }
       }
+
+      if (prev.id) {
+        updateUserProfile(prev.id, { name: trimmed })
+          .catch(e => console.warn('Could not update user name on server:', e.message));
+      }
+
       return updatedUser;
     });
 
@@ -881,6 +936,21 @@ export function UserProvider({ children }) {
       ...prev,
       [newExpId]: {} // 0 logged days initialized
     }));
+
+    if (user?.id) {
+      createExperiment({
+        userId: user.id,
+        title: experimentConfig.title || 'Wellness Micro-Experiment',
+        description: experimentConfig.changeDescription || '7-day micro-experiment',
+        targetMetric: (targetMetric || 'SLEEP').toUpperCase(),
+        startDate: new Date().toISOString().split('T')[0],
+        status: 'ACTIVE'
+      }).then(backendExp => {
+        if (backendExp?.id) {
+          setActiveExperiment(prev => prev ? { ...prev, backendId: backendExp.id } : prev);
+        }
+      }).catch(err => console.warn('Could not persist experiment to backend:', err.message));
+    }
   };
 
   // Complete experiment with decision
@@ -893,20 +963,23 @@ export function UserProvider({ children }) {
       completedDate: getTodayDateStr(),
     };
     setActiveExperiment(finishedExp);
-    setExperimentHistory(prev => {
+setExperimentHistory(prev => {
       if (prev.some(h => h.id === finishedExp.id)) {
         return prev.map(h => h.id === finishedExp.id ? finishedExp : h);
       }
       return [finishedExp, ...prev];
     });
-  };
 
-  // AUTOMATIC NEXT-WEEK HABITLOOP CYCLE TRANSITION
-  const completeCurrentWeekAndStartNext = () => {
-    const currStart = currentWeek.weekStart; // e.g. "2026-09-21"
-    const currEnd = currentWeek.weekEnd;     // e.g. "2026-09-27"
-    const nextStart = addCalendarDays(currEnd, 1); // e.g. "2026-09-28"
-    const nextEnd = addCalendarDays(nextStart, 6); // e.g. "2026-10-04"
+    if (activeExperiment?.backendId) {
+      updateExperimentStatus(activeExperiment.backendId, 'COMPLETED')
+        .catch(err => console.warn('Could not complete experiment on backend:', err.message));
+    }
+
+    // AUTOMATIC NEXT-WEEK HABITLOOP CYCLE TRANSITION
+    const currStart = currentWeek.weekStart;
+    const currEnd = currentWeek.weekEnd;
+    const nextStart = addCalendarDays(currEnd, 1);
+    const nextEnd = addCalendarDays(nextStart, 6);
 
     // Calculate current week score
     const metrics = calculateWeeklyMetrics(weeklyLogs);
@@ -942,9 +1015,12 @@ export function UserProvider({ children }) {
     };
 
     // Archive completed week into pastWeeks
-    setPastWeeks(prev => [...prev.filter(w => w.weekNumber !== currentWeek.weekNumber), completedWeekRecord]);
+    setPastWeeks(prev => [
+      ...prev.filter(w => w.weekNumber !== currentWeek.weekNumber),
+      completedWeekRecord
+    ]);
 
-    // Push completed experiment into experimentHistory
+    // Push completed experiment into experiment history
     if (archivedExp) {
       setExperimentHistory(prev => {
         if (prev.some(h => h.id === archivedExp.id)) return prev;
@@ -952,7 +1028,7 @@ export function UserProvider({ children }) {
       });
     }
 
-    // Move active experiment into history (no longer active on screen)
+    // Move active experiment into history
     setActiveExperiment(null);
 
     // Activate next week dynamically
@@ -980,6 +1056,25 @@ export function UserProvider({ children }) {
 
     return { nextWeekNumber, nextStart, nextEnd };
   };
+
+  const completeCurrentWeekAndStartNext = () => {
+  const result = completeExperiment('CONTINUE');
+
+  if (result) {
+    setCurrentWeek(prev => ({
+      ...prev,
+      weekNumber: result.nextWeekNumber,
+      startDate: result.nextStart,
+      endDate: result.nextEnd,
+    }));
+
+    setWeeklyCheckin({});
+    setWeeklyContext({});
+    setWeeklyLogs({});
+  }
+
+  return result;
+};
 
   // Helper to calculate 0-100 scores for all 8 primary wellness factors from weekly logs
   const getFactorScores = (logs) => {
@@ -1361,8 +1456,10 @@ export function UserProvider({ children }) {
       console.error('Error clearing active user email:', e);
     }
     setUser({
+      id: null,
       name: '',
       email: '',
+      username: '',
       isLoggedIn: false,
     });
     setOnboardingData({
@@ -1371,11 +1468,22 @@ export function UserProvider({ children }) {
       focusAreas: ['🌙 Sleep', '💧 Hydration', '🏃 Movement', '📚 Study & Work Balance'],
       goals: ['Improve sleep consistency', 'Drink more water', 'Take regular breaks'],
     });
-    setCurrentWeek({
-      weekNumber: 1,
-      weekStart: '2026-09-21',
-      weekEnd: '2026-09-27',
-    });
+    const today = new Date();
+const day = today.getDay();
+const monday = new Date(today);
+const diff = day === 0 ? -6 : 1 - day;
+monday.setDate(today.getDate() + diff);
+
+const sunday = new Date(monday);
+sunday.setDate(monday.getDate() + 6);
+
+const formatDate = (date) => date.toISOString().split('T')[0];
+
+setCurrentWeek({
+  weekNumber: 1,
+  weekStart: formatDate(monday),
+  weekEnd: formatDate(sunday),
+});
     setPastWeeks([]);
     setWeeklyLogs(createWeeklyLogsForDates('2026-09-21'));
     setWeeklyContext({

@@ -12,17 +12,35 @@ import java.util.Optional;
 
 @Repository
 public interface HabitLogRepository extends JpaRepository<HabitLog, Long> {
-    Optional<HabitLog> findByHabitIdAndLogDate(Long habitId, LocalDate logDate);
 
-    List<HabitLog> findByUserIdAndLogDate(Long userId, LocalDate logDate);
+    @Query("SELECT hl FROM HabitLog hl WHERE hl.habit.id = :habitId AND hl.logDate = :logDate")
+    Optional<HabitLog> findByHabitIdAndLogDate(@Param("habitId") Long habitId, @Param("logDate") LocalDate logDate);
 
-    List<HabitLog> findByUserIdAndLogDateBetween(Long userId, LocalDate startDate, LocalDate endDate);
+    @Query("SELECT hl FROM HabitLog hl WHERE hl.user.id = :userId")
+    List<HabitLog> findByUserId(@Param("userId") Long userId);
 
-    List<HabitLog> findByHabitIdAndLogDateBetween(Long habitId, LocalDate startDate, LocalDate endDate);
+    @Query("SELECT hl FROM HabitLog hl WHERE hl.user.id = :userId AND hl.logDate = :logDate")
+    List<HabitLog> findByUserIdAndLogDate(@Param("userId") Long userId, @Param("logDate") LocalDate logDate);
 
-    List<HabitLog> findByHabitIdOrderByLogDateAsc(Long habitId);
+    @Query("SELECT hl FROM HabitLog hl WHERE hl.user.id = :userId AND hl.logDate BETWEEN :startDate AND :endDate")
+    List<HabitLog> findByUserIdAndLogDateBetween(
+            @Param("userId") Long userId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
 
-    List<HabitLog> findByHabitIdOrderByLogDateDesc(Long habitId);
+    @Query("SELECT hl FROM HabitLog hl WHERE hl.habit.id = :habitId AND hl.logDate BETWEEN :startDate AND :endDate")
+    List<HabitLog> findByHabitIdAndLogDateBetween(
+            @Param("habitId") Long habitId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
+
+    @Query("SELECT hl FROM HabitLog hl WHERE hl.habit.id = :habitId ORDER BY hl.logDate ASC")
+    List<HabitLog> findByHabitIdOrderByLogDateAsc(@Param("habitId") Long habitId);
+
+    @Query("SELECT hl FROM HabitLog hl WHERE hl.habit.id = :habitId ORDER BY hl.logDate DESC")
+    List<HabitLog> findByHabitIdOrderByLogDateDesc(@Param("habitId") Long habitId);
 
     @Query("SELECT COUNT(hl) FROM HabitLog hl WHERE hl.habit.id = :habitId AND hl.completed = true")
     long countCompletedByHabitId(@Param("habitId") Long habitId);

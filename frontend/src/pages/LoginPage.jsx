@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 import { useAppNavigate as useNavigate } from '../context/PageTransitionContext';
+import { loginUser } from '../api/client';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -11,15 +12,31 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (loginOrSignupUser) {
-      loginOrSignupUser({
+    setError('');
+    setLoading(true);
+    try {
+      const result = await loginUser({
         email: email.trim(),
+        password,
       });
+      const apiUser = result.user;
+      loginOrSignupUser({
+        id: apiUser.id,
+        name: apiUser.name,
+        email: apiUser.email,
+        username: apiUser.username,
+      });
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.message || 'Login failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    navigate('/dashboard');
   };
 
   return (
@@ -38,6 +55,12 @@ export default function LoginPage() {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="auth-form">
+            {error && (
+              <div className="auth-error-alert">
+                {error}
+              </div>
+            )}
+
             <div className="form-group">
               <label className="form-label">Email</label>
               <input
@@ -47,6 +70,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
                 className="form-input"
+                disabled={loading}
               />
             </div>
 
@@ -60,6 +84,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   className="form-input"
+                  disabled={loading}
                 />
                 <button
                   type="button"
@@ -72,8 +97,8 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <button type="submit" className="btn btn-primary btn-auth-submit">
-              <span>Log In</span>
+            <button type="submit" className="btn btn-primary btn-auth-submit" disabled={loading}>
+              <span>{loading ? 'Logging in…' : 'Log In'}</span>
               <ArrowRight size={16} />
             </button>
           </form>

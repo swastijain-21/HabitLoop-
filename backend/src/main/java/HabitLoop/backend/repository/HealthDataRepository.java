@@ -12,12 +12,14 @@ import java.util.Optional;
 
 @Repository
 public interface HealthDataRepository extends JpaRepository<HealthData, Long> {
-    Optional<HealthData> findByUserIdAndRecordDate(Long userId, LocalDate recordDate);
+    @Query("SELECT h FROM HealthData h WHERE h.user.id = :userId AND h.recordDate = :recordDate")
+    Optional<HealthData> findByUserIdAndRecordDate(@Param("userId") Long userId, @Param("recordDate") LocalDate recordDate);
 
+    @Query("SELECT h FROM HealthData h WHERE h.user.id = :userId AND h.recordDate BETWEEN :startDate AND :endDate ORDER BY h.recordDate ASC")
     List<HealthData> findByUserIdAndRecordDateBetweenOrderByRecordDateAsc(
-            Long userId,
-            LocalDate startDate,
-            LocalDate endDate
+            @Param("userId") Long userId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
     );
 
     @Query("SELECT AVG(h.sleepHours) FROM HealthData h WHERE h.user.id = :userId AND h.recordDate BETWEEN :startDate AND :endDate AND h.sleepHours IS NOT NULL")
